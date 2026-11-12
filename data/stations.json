@@ -1,0 +1,19 @@
+{
+  "_comment": "One entry per manufacturing stage, in line order. 'work' is the effort one cylinder needs at that stage; an automated machine supplies 'base_rate' work per second per level. 'pos' is the station's position on the factory floor (pixels) and 'path_after' lists conveyor corner points on the way to the next station. 'milestones' double a machine's speed at the listed levels.",
+  "layout": {"dispatch_pos": [66, 252], "stock_pos": [60, 126], "station_half_width": 14},
+  "milestones": [[10, 2.0], [25, 2.0], [50, 2.0], [100, 2.0], [150, 2.0], [200, 2.0]],
+  "stations": [
+    {"id": "cut", "pos": [96, 128],  "sprite": "cut",  "icon": "cut",  "name": "Cutting",       "machine_name": "Auto-Shear",     "work": 4.0, "base_rate": 1.0, "machine_cost": 30,  "cost_growth": 1.22,
+     "desc": "Shears copper sheet to size without a hand on the lever."},
+    {"id": "roll", "pos": [216, 128], "sprite": "roll", "icon": "roll", "name": "Rolling",       "machine_name": "Power Rollers",  "work": 5.0, "base_rate": 1.0, "machine_cost": 55,  "cost_growth": 1.22,
+     "desc": "Motorised rollers curl each sheet into a tube."},
+    {"id": "weld", "pos": [336, 128], "path_after": [[408, 128], [408, 252]], "sprite": "weld", "icon": "weld", "name": "Welding",       "machine_name": "Welding Robot",  "work": 8.0, "base_rate": 1.0, "machine_cost": 120,  "cost_growth": 1.22,
+     "desc": "A robot arm brazes the seam and domes. Slow work - watch for queues here."},
+    {"id": "test", "pos": [348, 252], "sprite": "test", "icon": "test", "name": "Pressure Test", "machine_name": "Auto Test Rig",  "work": 6.0, "base_rate": 1.0, "machine_cost": 90,  "cost_growth": 1.22,
+     "desc": "Clamps, fills and pressure-tests every cylinder automatically."},
+    {"id": "foam", "pos": [238, 252], "sprite": "foam", "icon": "foam", "name": "Insulation",    "machine_name": "Foam Injector",  "work": 5.0, "base_rate": 1.0, "machine_cost": 75,  "cost_growth": 1.22,
+     "desc": "Sprays the classic green foam jacket."},
+    {"id": "pack", "pos": [128, 252], "sprite": "pack", "icon": "pack", "name": "Packing",       "machine_name": "Auto-Packer",    "work": 4.0, "base_rate": 1.0, "machine_cost": 45,  "cost_growth": 1.22,
+     "desc": "Boxes, tapes and labels cylinders ready for the van."}
+  ]
+}

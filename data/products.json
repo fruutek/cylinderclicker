@@ -1,0 +1,27 @@
+{
+  "_comment": "Products are composed, not hard-coded: a product = material + range + any number of variants. Values multiply together, so 'Stainless Steel' + 'Pre-Plumbed' + 'Slimline' needs no extra data. 'available': false marks content planned for a later milestone (shown locked in game).",
+  "materials": [
+    {"id": "copper", "name": "Copper", "value": 12.0, "material_cost": 4.0, "work_mult": 1.0, "available": true,
+     "desc": "The classic British copper cylinder. Simple, dependable, where every works begins."},
+    {"id": "stainless", "name": "Stainless Steel", "value": 150.0, "material_cost": 55.0, "work_mult": 2.5, "available": false,
+     "desc": "Unvented stainless cylinders. New materials, new machines, far better margins."}
+  ],
+  "ranges": [
+    {"id": "standard", "name": "Cylinder", "value_mult": 1.0, "cost_mult": 1.0, "work_mult": 1.0, "available": true,
+     "desc": "A standard hot water cylinder."},
+    {"id": "thermal_store", "name": "Thermal Store", "value_mult": 4.0, "cost_mult": 3.0, "work_mult": 2.0, "available": false,
+     "desc": "Bigger vessels with extra coils and tappings. Slower to build, worth much more."},
+    {"id": "pre_plumbed", "name": "Pre-Plumbed Cylinder", "value_mult": 9.0, "cost_mult": 6.0, "work_mult": 3.0, "available": false,
+     "desc": "Fitted with pumps, valves and pipework on a dedicated assembly stage."}
+  ],
+  "variants": [
+    {"id": "slimline", "name": "Slimline", "value_mult": 1.25, "cost_mult": 1.05, "work_mult": 1.1, "available": false, "desc": "Narrow cylinders for tight airing cupboards."},
+    {"id": "horizontal", "name": "Horizontal", "value_mult": 1.35, "cost_mult": 1.1, "work_mult": 1.15, "available": false, "desc": "Built to lie flat in a loft."},
+    {"id": "high_capacity", "name": "High-Capacity", "value_mult": 1.8, "cost_mult": 1.5, "work_mult": 1.4, "available": false, "desc": "Big tanks for big households."},
+    {"id": "indirect", "name": "Indirect", "value_mult": 1.3, "cost_mult": 1.15, "work_mult": 1.2, "available": false, "desc": "Heated by a boiler coil."},
+    {"id": "direct", "name": "Direct", "value_mult": 1.15, "cost_mult": 1.05, "work_mult": 1.05, "available": false, "desc": "Heated by immersion elements."},
+    {"id": "twin_coil", "name": "Twin-Coil", "value_mult": 1.6, "cost_mult": 1.3, "work_mult": 1.35, "available": false, "desc": "A second coil for solar or heat pumps."},
+    {"id": "premium", "name": "Premium Spec", "value_mult": 2.0, "cost_mult": 1.4, "work_mult": 1.5, "available": false, "desc": "Made-to-order specifications."}
+  ],
+  "starting_product": {"material": "copper", "range": "standard", "variants": []}
+}

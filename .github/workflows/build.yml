@@ -1,0 +1,46 @@
+name: Test and build Windows game
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and Windows export template
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          curl -sSL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
+          mkdir -p "$TEMPLATE_DIR"
+          unzip -q -j templates.tpz "templates/windows_release_x86_64.exe" "templates/version.txt" -d "$TEMPLATE_DIR"
+          rm godot.zip templates.tpz
+
+      - name: Import project
+        run: godot --headless --path . --import
+
+      - name: Run logic tests
+        run: godot --headless --path . -s tests/run_tests.gd
+
+      - name: Run save/load/offline flow test
+        run: tests/run_save_flow.sh godot
+
+      - name: Export Windows build
+        run: |
+          mkdir -p build/windows
+          godot --headless --path . --export-release "Windows Desktop" build/windows/CylinderClicker.exe
+          test -s build/windows/CylinderClicker.exe
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CylinderClicker-windows
+          path: build/windows/CylinderClicker.exe

@@ -1,0 +1,34 @@
+{
+  "_comment": "Upgrade effects are modular: each effect targets a stat. Ops: 'add' (flat, per level), 'add_pct' (adds value*level to a multiplier) and 'mul' (multiplies by value^level). Final stat = (base + add) * (1 + add_pct) * mul. 'unlock_at' is the lifetime earnings needed before the upgrade appears. max_level 0 = unlimited.",
+  "base_stats": {
+    "click_power": 1.0,
+    "click_boost": 0.05,
+    "sell_value": 1.0,
+    "material_cost": 1.0,
+    "machine_speed": 1.0,
+    "belt_speed": 48.0,
+    "offline_hours": 8.0
+  },
+  "upgrades": [
+    {"id": "hand_tools", "name": "Better Hand Tools", "icon": "hand_tools", "base_cost": 15, "cost_growth": 1.6, "max_level": 25, "unlock_at": 0,
+     "desc": "Faster production: every click does more work at each station.",
+     "effect_text": "+1 work per click",
+     "effects": [{"stat": "click_power", "op": "add", "value": 1.0}]},
+    {"id": "finish", "name": "Polished Finish", "icon": "finish", "base_cost": 60, "cost_growth": 1.9, "max_level": 0, "unlock_at": 0,
+     "desc": "Higher selling value: a mirror polish and a smart label. Customers pay more.",
+     "effect_text": "+20% sale price",
+     "effects": [{"stat": "sell_value", "op": "mul", "value": 1.2}]},
+    {"id": "conveyor", "name": "Conveyor Motors", "icon": "conveyor", "base_cost": 120, "cost_growth": 2.0, "max_level": 5, "unlock_at": 60,
+     "desc": "Beefier belt motors. Cylinders reach the next station sooner.",
+     "effect_text": "+20% belt speed",
+     "effects": [{"stat": "belt_speed", "op": "add_pct", "value": 0.2}]},
+    {"id": "whistle", "name": "Rallying Whistle", "icon": "whistle", "base_cost": 400, "cost_growth": 2.4, "max_level": 8, "unlock_at": 250,
+     "desc": "Keeps clicking worthwhile: each click also gives every machine a burst of extra output.",
+     "effect_text": "+5% of machine speed per click",
+     "effects": [{"stat": "click_boost", "op": "add", "value": 0.05}]},
+    {"id": "lean", "name": "Lean Workflow", "icon": "lean", "base_cost": 900, "cost_growth": 2.3, "max_level": 0, "unlock_at": 600,
+     "desc": "Factory-wide efficiency drive. Every machine runs faster.",
+     "effect_text": "+15% all machine speed",
+     "effects": [{"stat": "machine_speed", "op": "mul", "value": 1.15}]}
+  ]
+}
