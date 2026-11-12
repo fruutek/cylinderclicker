@@ -116,6 +116,15 @@ static func theme() -> Theme:
 	t.set_icon("grabber_highlight", "HSlider", grab_hi)
 	t.set_icon("grabber_disabled", "HSlider", grab)
 
+	t.set_stylebox("normal", "LineEdit", flat(PARCH_LIGHT, WOOD_DARK, 1, 3))
+	t.set_stylebox("focus", "LineEdit", flat(Color("fffbe8"), COPPER, 1, 3))
+	t.set_stylebox("read_only", "LineEdit", flat(PARCH_DARK, INK_SOFT, 1, 3))
+	t.set_color("font_color", "LineEdit", INK)
+	t.set_color("font_selected_color", "LineEdit", PARCH_LIGHT)
+	t.set_color("selection_color", "LineEdit", COPPER)
+	t.set_color("caret_color", "LineEdit", INK)
+	t.set_color("font_placeholder_color", "LineEdit", INK_SOFT)
+
 	t.set_constant("separation", "VBoxContainer", 3)
 	t.set_constant("separation", "HBoxContainer", 4)
 	_theme = t

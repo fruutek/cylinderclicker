@@ -12,7 +12,7 @@
     {"id": "test", "pos": [348, 252], "sprite": "test", "icon": "test", "name": "Pressure Test", "machine_name": "Auto Test Rig",  "work": 6.0, "base_rate": 1.0, "machine_cost": 90,  "cost_growth": 1.22,
      "desc": "Clamps, fills and pressure-tests every cylinder automatically."},
     {"id": "foam", "pos": [238, 252], "sprite": "foam", "icon": "foam", "name": "Insulation",    "machine_name": "Foam Injector",  "work": 5.0, "base_rate": 1.0, "machine_cost": 75,  "cost_growth": 1.22,
-     "desc": "Sprays the classic green foam jacket."},
+     "desc": "Sprays the classic light blue foam jacket."},
     {"id": "pack", "pos": [128, 252], "sprite": "pack", "icon": "pack", "name": "Packing",       "machine_name": "Auto-Packer",    "work": 4.0, "base_rate": 1.0, "machine_cost": 45,  "cost_growth": 1.22,
      "desc": "Boxes, tapes and labels cylinders ready for the van."}
   ]

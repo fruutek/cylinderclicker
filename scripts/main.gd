@@ -10,7 +10,7 @@ var _hud: Hud
 var _shop: ShopPanel
 var _tutorial: Tutorial
 var _dialog_layer: Control
-var _settings_dialog: ModalDialog
+var _pause_dialog: ModalDialog
 var _save_toast: Label
 var _toast_time := 0.0
 
@@ -23,6 +23,9 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	session = Game.session
+	# This node keeps running while the game is paused (so the pause menu and
+	# Escape work); the factory, HUD, shop and tutorial below are pausable.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 	_factory_area = Control.new()
@@ -44,7 +47,7 @@ func _ready() -> void:
 	_hud = Hud.new()
 	add_child(_hud)
 	_hud.setup(session)
-	_hud.settings_pressed.connect(toggle_settings)
+	_hud.settings_pressed.connect(open_pause_menu)
 
 	_tutorial = Tutorial.new()
 	add_child(_tutorial)
@@ -56,22 +59,24 @@ func _ready() -> void:
 	add_child(tip_layer)
 	_shop.setup(session, tip_layer)
 
-	_save_toast = UiTheme.label("", UiTheme.CREAM)
-	_save_toast.position = Vector2(6, Hud.HEIGHT + 4)
-	add_child(_save_toast)
-
 	_dialog_layer = Control.new()
 	_dialog_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_dialog_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_dialog_layer)
 
+	# Save feedback sits above everything, so it is readable over the pause menu.
+	_save_toast = UiTheme.label("", UiTheme.CREAM)
+	_save_toast.position = Vector2(6, Hud.HEIGHT + 4)
+	add_child(_save_toast)
+	for node: Node in [_factory_area, _shop, _hud, _tutorial]:
+		node.process_mode = Node.PROCESS_MODE_PAUSABLE
+
 	session.shipped.connect(func(_c: float, _a: float) -> void: Sfx.play("sale", 0.06, -4.0))
 	session.station_finished.connect(func(_i: int) -> void: Sfx.play("thunk", 0.1, -10.0))
-	Game.saved.connect(func() -> void:
-		_save_toast.text = "Game saved"
-		_toast_time = 2.0)
+	Game.saved.connect(_toast.bind("Game saved", UiTheme.CREAM))
+	Game.save_failed.connect(_toast.bind("SAVE FAILED - could not write the save file", Color("ff8a70")))
 
-	_apply_fullscreen()
+	Game.apply_display()
 	if not Game.pending_offline.is_empty():
 		_show_offline(Game.pending_offline)
 		Game.pending_offline = {}
@@ -92,6 +97,13 @@ func _process(delta: float) -> void:
 		_save_toast.modulate.a = clampf(_toast_time, 0.0, 1.0)
 		if _toast_time <= 0.0:
 			_save_toast.text = ""
+
+
+func _toast(text: String, color: Color) -> void:
+	_save_toast.text = text
+	_save_toast.add_theme_color_override("font_color", color)
+	_save_toast.modulate.a = 1.0
+	_toast_time = 2.5
 
 
 # ------------------------------------------------------------------ input
@@ -115,24 +127,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if not modal_open:
 				do_click(_factory.layout.station_positions[0] + Vector2(120, 60))
 		KEY_ESCAPE:
-			toggle_settings()
+			if modal_open:
+				var top := _dialog_layer.get_child(_dialog_layer.get_child_count() - 1) as ModalDialog
+				if top != null and top.esc_closes:
+					top.close()
+			else:
+				open_pause_menu()
 		KEY_F11:
 			session.state.settings["fullscreen"] = not bool(session.state.settings.get("fullscreen", false))
-			_apply_fullscreen()
+			Game.apply_display()
+			Game.save_settings()
 		KEY_1, KEY_2, KEY_3:
 			if not modal_open:
 				_shop.show_tab(event.keycode - KEY_1, true)
 	get_viewport().set_input_as_handled()
-
-
-func _apply_fullscreen() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
-	var want := bool(session.state.settings.get("fullscreen", false))
-	var mode := DisplayServer.window_get_mode()
-	var is_full := mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
-	if want != is_full:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if want else DisplayServer.WINDOW_MODE_WINDOWED)
 
 
 # ---------------------------------------------------------------- dialogs
@@ -142,7 +150,8 @@ func _open(d: ModalDialog) -> void:
 
 func _show_intro() -> void:
 	var d := ModalDialog.new("CYLINDER CLICKER", 300)
-	d.add_text("Welcome to Coppertop Cylinder Works!\n\nYou have just taken on a small British hot water cylinder factory: one production line, six hand-worked stations and a van waiting at the door.")
+	d.esc_closes = false
+	d.add_text("Welcome to %s!\n\nYou have just taken on a small British hot water cylinder factory: one production line, six hand-worked stations and a van waiting at the door." % session.state.factory_name)
 	d.add_text("• CLICK the factory floor to work every station.\n• Finished cylinders roll to the van and earn money.\n• Spend it on upgrades and machines until the line runs itself.", UiTheme.INK_SOFT)
 	d.add_button("Open the factory!", func() -> void: session.state.tutorial_step = 1)
 	_open(d)
@@ -150,6 +159,7 @@ func _show_intro() -> void:
 
 func _show_offline(summary: Dictionary) -> void:
 	var d := ModalDialog.new("WELCOME BACK!", 280)
+	d.esc_closes = false
 	d.add_text("You were away for %s. Your machines kept the line running." % NumFmt.duration(summary["away_seconds"]))
 	d.add_text("Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
 	if summary["capped"]:
@@ -160,64 +170,25 @@ func _show_offline(summary: Dictionary) -> void:
 		session.state.tutorial_step = 1
 
 
-func toggle_settings() -> void:
-	if is_instance_valid(_settings_dialog):
-		_settings_dialog.close()
-		return
+# ------------------------------------------------------------- pause menu
+func open_pause_menu() -> void:
 	if _dialog_layer.get_child_count() > 0:
 		return
 	Sfx.play("blip")
-	var st := session.state
-	var d := ModalDialog.new("SETTINGS", 270)
-	_settings_dialog = d
-	d.add_control(_slider_row("Sound effects", "sfx_volume"))
-	d.add_control(_slider_row("Music", "music_volume"))
-	var fs := Button.new()
-	fs.focus_mode = Control.FOCUS_NONE
-	fs.text = "Fullscreen: %s  (F11)" % ("ON" if bool(st.settings.get("fullscreen", false)) else "OFF")
-	fs.pressed.connect(func() -> void:
-		st.settings["fullscreen"] = not bool(st.settings.get("fullscreen", false))
-		fs.text = "Fullscreen: %s  (F11)" % ("ON" if st.settings["fullscreen"] else "OFF")
-		_apply_fullscreen())
-	d.add_control(fs)
-	d.add_text("Time played: %s    Clicks: %s\nTotal earned: %s\nBest output: %s cylinders/min" % [
-		NumFmt.duration(st.play_seconds), NumFmt.number(st.total_clicks), NumFmt.money(st.lifetime_earned),
-		NumFmt.number(st.best_rate_per_min, 1)], UiTheme.INK_SOFT)
-	d.add_text("The game saves automatically every 30 seconds and when you quit.", UiTheme.INK_SOFT)
-	d.add_button("Resume")
-	d.add_button("Save now", func() -> void: Game.save_now(), false)
-	d.add_button("Reset...", _confirm_reset)
-	d.add_button("Quit", func() -> void: Game.quit_game())
+	get_tree().paused = true   # stops the simulation, autosave timer and factory animation
+	var d := ModalDialog.new("PAUSED", 210)
+	_pause_dialog = d
+	var name_label := d.add_text(session.state.factory_name, UiTheme.INK_SOFT)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	d.add_menu_button("Resume Game")
+	d.add_menu_button("Save Game", func() -> void: Game.save_now(), false)
+	d.add_menu_button("Settings", func() -> void: _open(Dialogs.settings(true)), false)
+	d.add_menu_button("Rename Factory", func() -> void:
+		_open(Dialogs.name_factory("RENAME FACTORY", session.state.factory_name, "Rename", func(new_name: String) -> void:
+			session.state.factory_name = new_name
+			name_label.text = new_name
+			_factory.queue_sign_redraw())), false)
+	d.add_menu_button("Save & Return to Main Menu", func() -> void: Game.return_to_menu(), false)
+	d.add_menu_button("Quit to Desktop", func() -> void: Game.quit_game(), false)
+	d.closed.connect(func() -> void: get_tree().paused = false)
 	_open(d)
-
-
-func _slider_row(text: String, key: String) -> Control:
-	var row := HBoxContainer.new()
-	var l := UiTheme.label(text)
-	l.custom_minimum_size = Vector2(90, 0)
-	row.add_child(l)
-	var s := HSlider.new()
-	s.min_value = 0.0
-	s.max_value = 1.0
-	s.step = 0.05
-	s.value = float(session.state.settings.get(key, 0.5))
-	s.custom_minimum_size = Vector2(140, 12)
-	s.focus_mode = Control.FOCUS_NONE
-	s.value_changed.connect(func(v: float) -> void:
-		session.state.settings[key] = v
-		Sfx.apply_settings()
-		if key == "sfx_volume":
-			Sfx.play("blip"))
-	row.add_child(s)
-	return row
-
-
-func _confirm_reset() -> void:
-	var d := ModalDialog.new("RESET PROGRESS?", 260)
-	d.add_text("This wipes your factory, cash and upgrades and starts again from nothing. It cannot be undone.", UiTheme.RED)
-	d.add_button("Keep my factory")
-	d.add_button("Wipe everything", func() -> void:
-		Game.reset_progress()
-		get_tree().reload_current_scene())
-	# Defer so the settings dialog has finished closing first.
-	_open.call_deferred(d)

@@ -7,7 +7,7 @@ extends RefCounted
 ## * Writes go to a temp file first and the previous save is kept as `.bak`,
 ##   so a crash mid-write cannot destroy progress.
 
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 const DEFAULT_PATH := "user://savegame.json"
 const GAME_ID := "cylinder_clicker"
 
@@ -85,6 +85,15 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				st.erase("version")
 				st.erase("game")
 				payload = {"game": GAME_ID, "version": 1, "state": st}
+			1:
+				# v2 added factory naming and saved work-in-progress. Factories from
+				# before naming keep the name that was painted on their wall sign.
+				var st1: Variant = payload.get("state", {})
+				if typeof(st1) != TYPE_DICTIONARY:
+					return {}
+				if not st1.has("factory_name"):
+					st1["factory_name"] = GameState.LEGACY_FACTORY_NAME
+				payload["version"] = 2
 			_:
 				return {}
 		version = int(payload.get("version", version + 1))

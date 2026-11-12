@@ -1,7 +1,7 @@
 # Cylinder Clicker
 
 A cosy 2D pixel-art factory idle game. You run **Coppertop Cylinder Works**, a small British
-hot water cylinder factory: click to work the line, sell copper cylinders, buy machines and
+hot water cylinder factory that you name yourself: click to work the line, sell copper cylinders, buy machines and
 watch the factory slowly learn to run itself.
 
 Built with **Godot 4.7 + GDScript**. Fully offline, local saves only, no third-party assets.
@@ -34,7 +34,7 @@ To make your own exe from the editor: *Project > Export > Windows Desktop > Expo
 | Click a shop row | Buy that upgrade / machine |
 | Hover a shop row | Tooltip with what it does and what the next level gives |
 | **1 / 2 / 3** | Upgrades / Machines / Products tabs |
-| **Esc** or the gear button | Settings (volume, fullscreen, save, reset, quit) |
+| **Esc** or the gear button | Pause menu (resume, save, settings, rename factory, return to main menu, quit) |
 | **F11** | Toggle fullscreen |
 
 ## What is in this first playable version
@@ -42,7 +42,7 @@ To make your own exe from the editor: *Project > Export > Windows Desktop > Expo
 - One copper cylinder production line with six stations: Cutting, Rolling, Welding,
   Pressure Test, Insulation, Packing, then dispatch to the van.
 - Cylinders are visible objects that ride the conveyors and change appearance at each stage
-  (sheet > cut sheet > rolled tube > welded cylinder > tested > foam-insulated > boxed).
+  (sheet > cut sheet > rolled tube > welded cylinder > tested > blue foam-insulated > boxed).
 - Clicking adds work at every station. Each station can be automated with its own machine,
   and each machine can be levelled up (speed doubles at levels 10, 25, 50...).
 - Real bottlenecks: belts are the buffers, so a slow station makes cylinders queue up behind
@@ -52,7 +52,13 @@ To make your own exe from the editor: *Project > Export > Windows Desktop > Expo
   Conveyor Motors, Rallying Whistle (keeps clicking useful late on) and Lean Workflow.
   Later ones reveal themselves as your lifetime earnings grow.
 - Economy: sale price minus material cost = profit per cylinder; exponential upgrade costs.
-- Saving: autosave every 30 seconds and on quit, with a backup copy and a versioned format.
+- Main menu (New Game, Continue, Settings, Quit) and an in-game pause menu on Esc that
+  freezes the factory while it is open.
+- Name your factory when you start; the name is painted on the wall sign and can be changed
+  from the pause menu.
+- Saving: manual save from the pause menu, autosave every 30 seconds, and on returning to
+  the menu or quitting. Saves include the cylinders currently on the line, keep a backup
+  copy and use a versioned format (older saves are migrated).
   Saves live in `%APPDATA%\CylinderClicker\savegame.json`.
 - Offline progress: a fully automated line keeps earning while the game is closed (up to
   8 hours), with a welcome-back summary.
@@ -74,7 +80,8 @@ scripts/core/     pure game logic - no nodes, no rendering (fully unit-tested)
   product_catalog.gd   composes products from parts
   save_manager.gd      versioned saves with migration and backup
   num_format.gd        number/currency formatting (K, M, B ... then scientific)
-scripts/autoload/ Game (fixed-timestep loop, autosave) and Sfx (audio)
+scripts/autoload/ Game (fixed-timestep loop, saving, menu/game switching) and Sfx (audio)
+scripts/menu.gd   main menu; scripts/main.gd is the factory scene
 scripts/view/     factory_view.gd - draws the factory from the simulation state
 scripts/ui/       HUD, shop, tutorial, dialogs, theme
 assets/           generated sprites, font and audio
@@ -105,6 +112,7 @@ tests/            headless tests, a balancing bot and a screenshot bot
 godot --headless --path . --import                 # first time only
 godot --headless --path . -s tests/run_tests.gd    # logic tests
 tests/run_save_flow.sh                             # real save > quit > load > offline flow
+tests/run_menu_flow.sh                             # menus, naming, pause, saving and restart, end to end
 godot --headless --path . -s tests/balance_bot.gd  # pacing report from a simulated player
 python3 tools/gen_art.py                           # regenerate sprites (needs Pillow)
 python3 tools/gen_font.py                          # regenerate the pixel font

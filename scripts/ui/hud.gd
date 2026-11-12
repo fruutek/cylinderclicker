@@ -63,7 +63,7 @@ func setup(p_session: GameSession) -> void:
 
 	var gear := Button.new()
 	gear.icon = preload("res://assets/sprites/gear.png")
-	gear.tooltip_text = "Settings (Esc)"
+	gear.tooltip_text = "Menu (Esc)"
 	gear.position = Vector2(614, 5)
 	gear.size = Vector2(22, 20)
 	gear.focus_mode = Control.FOCUS_NONE

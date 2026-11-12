@@ -1,7 +1,7 @@
 extends Node
 ## Dev tool: plays the game automatically and saves screenshots, so the
 ## visuals can be checked on machines with no display attached.
-## Run:  godot --path . -- --fresh --bot=res://tests/capture_bot.gd --capture=/some/folder
+## Run:  godot --path . -- --fresh --autostart --bot=res://tests/capture_bot.gd --capture=/some/folder
 
 var out_dir := ""
 var main: Node
@@ -12,6 +12,7 @@ var _plan: Array = []
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture="):
 			out_dir = arg.trim_prefix("--capture=")
@@ -38,9 +39,10 @@ func _ready() -> void:
 		[60.0, func() -> void: _hover_row("machine_weld"); _shot_later("05_bottleneck_tooltip")],
 		[62.0, func() -> void: main.get("_shop").show_tab(0); _hover_row("finish"); _shot_later("06_upgrades_tab")],
 		[64.0, func() -> void: main.get("_shop").show_tab(2); _shot_later("07_products_tab")],
-		[66.0, func() -> void: main.call("toggle_settings"); _shot_later("08_settings")],
+		[66.0, func() -> void: main.call("open_pause_menu"); _shot_later("08_pause_menu")],
 		[68.0, func() -> void:
-			main.call("toggle_settings")
+			_close_dialogs()
+			get_tree().paused = false
 			main.call("_show_offline", {"away_seconds": 7400.0, "counted_seconds": 7400.0, "capped": false, "cylinders": 925.0, "cash": 7400.0})
 			_shot_later("09_offline")],
 		[70.0, func() -> void:

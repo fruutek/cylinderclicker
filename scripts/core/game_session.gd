@@ -66,6 +66,17 @@ func load_state(d: Dictionary) -> void:
 				state.upgrade_levels[id] = mini(state.upgrade_levels[id], max_level)
 	line.clear()
 	refresh()
+	var saved_line: Variant = d.get("line", {})
+	if typeof(saved_line) == TYPE_DICTIONARY and not saved_line.is_empty():
+		line.from_dict(saved_line)
+
+
+## Everything that goes into a save file: persistent state plus the
+## cylinders currently on the line.
+func save_data() -> Dictionary:
+	var d := state.to_dict()
+	d["line"] = line.to_dict()
+	return d
 
 
 ## Recomputes every derived value after anything changes.

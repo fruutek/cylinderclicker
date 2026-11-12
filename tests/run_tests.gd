@@ -17,7 +17,7 @@ func _init() -> void:
 		"test_number_format", "test_data", "test_products", "test_manual_production", "test_idle_without_machines",
 		"test_purchases", "test_sell_value", "test_stat_ops", "test_automation_revenue", "test_bottleneck",
 		"test_click_boost", "test_batching", "test_save_roundtrip", "test_save_backup_and_migration",
-		"test_offline", "test_determinism", "test_big_numbers",
+		"test_offline", "test_determinism", "test_big_numbers", "test_factory_name", "test_line_persistence", "test_v1_migration",
 	]:
 		print("- ", t)
 		call(t)
@@ -240,7 +240,8 @@ func test_save_roundtrip() -> void:
 	run(s, 30.0, 4.0)
 	s.state.settings["music_volume"] = 0.1
 	s.state.tutorial_step = 4
-	check(SaveManager.save_game(s.state.to_dict(), TEST_SAVE, 1000.0), "save succeeds")
+	s.state.factory_name = "Taylor & Sons"
+	check(SaveManager.save_game(s.save_data(), TEST_SAVE, 1000.0), "save succeeds")
 	var loaded := SaveManager.load_game(TEST_SAVE)
 	check(not loaded.is_empty(), "load succeeds")
 	var s2 := new_session()
@@ -256,6 +257,8 @@ func test_save_roundtrip() -> void:
 	check(s2.state.tutorial_step == 4, "tutorial progress persists")
 	near(s2.state.last_saved_unix, 1000.0, 0.001, "save timestamp stored")
 	check(s2.state.current_product["material"] == "copper", "product persists")
+	check(s2.state.factory_name == "Taylor & Sons", "factory name persists")
+	check(s2.state.unlocked_products == s.state.unlocked_products, "unlocked products persist")
 
 
 func test_save_backup_and_migration() -> void:
@@ -324,3 +327,52 @@ func test_big_numbers() -> void:
 	check(s.state.cash <= NumFmt.MAX_VALUE and not is_inf(s.state.cash), "cash clamped below overflow")
 	check(NumFmt.money(s.state.cash).length() < 16, "huge values format compactly: " + NumFmt.money(s.state.cash))
 	check(not is_inf(s.cost_at_level("finish", 5000)), "upgrade cost never overflows")
+
+
+func test_factory_name() -> void:
+	var s := new_session()
+	check(s.state.factory_name == "My Cylinder Factory", "sensible default name")
+	check(GameState.clean_name("   ") == GameState.DEFAULT_FACTORY_NAME, "blank names fall back to the default")
+	check(GameState.clean_name("  Bob's Works  ") == "Bob's Works", "names are trimmed")
+	check(GameState.clean_name("A".repeat(60)).length() == GameState.MAX_NAME_LENGTH, "names are length-limited")
+	check(GameState.clean_name("Caf\u00e9 \u2603 Works") == "Caf  Works", "undrawable characters removed")
+
+
+func test_line_persistence() -> void:
+	var s := new_session()
+	automate_all(s, 3)
+	run(s, 47.3, 2.0)
+	var before := s.line.all_tokens().size()
+	check(before >= 6, "line has work in progress (%d items)" % before)
+	var s2 := new_session()
+	s2.load_state(JSON.parse_string(JSON.stringify(s.save_data())))
+	check(s2.line.all_tokens().size() == before, "items on the line are restored")
+	for i in s.line.stations.size():
+		near(s2.line.stations[i].progress, s.line.stations[i].progress, 0.0001, "station %d progress restored" % i)
+		check(s2.line.belts[i].tokens.size() == s.line.belts[i].tokens.size(), "belt %d queue restored" % i)
+	# The restored line carries on exactly like the original.
+	run(s, 120.0)
+	run(s2, 120.0)
+	near(s2.state.cylinders_made, s.state.cylinders_made, 1.0, "restored line keeps producing identically")
+	near(s2.state.cash, s.state.cash, 8.01, "restored line earns identically")
+	# Damaged snapshots are ignored rather than crashing.
+	var s3 := new_session()
+	var bad := s.save_data()
+	bad["line"] = {"stations": "nonsense", "belts": [1, 2]}
+	s3.load_state(bad)
+	check(s3.line.all_tokens().is_empty(), "invalid line data is ignored")
+
+
+func test_v1_migration() -> void:
+	check(SaveManager.SAVE_VERSION == 2, "save format is version 2")
+	SaveManager.delete_save(TEST_SAVE)
+	var f := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"game": "cylinder_clicker", "version": 1, "state": {
+		"cash": 777.0, "cylinders_made": 55.0, "upgrade_levels": {"machine_cut": 3, "finish": 2}, "last_saved_unix": 5.0}}))
+	f.close()
+	var s := new_session()
+	s.load_state(SaveManager.load_game(TEST_SAVE))
+	near(s.state.cash, 777.0, 0.001, "v1 cash kept")
+	check(s.level("machine_cut") == 3 and s.level("finish") == 2, "v1 upgrades kept")
+	check(s.state.factory_name == GameState.LEGACY_FACTORY_NAME, "v1 factory keeps its original sign name")
+	check(s.line.all_tokens().is_empty(), "v1 save starts with an empty line")

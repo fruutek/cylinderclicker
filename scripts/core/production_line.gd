@@ -122,6 +122,63 @@ func clear() -> void:
 		b.tokens.clear()
 
 
+## Snapshot of the work in progress (for saving).
+func to_dict() -> Dictionary:
+	var st: Array = []
+	for s in stations:
+		var entry := {"progress": s.progress}
+		if s.token != null:
+			entry["token"] = {"stage": s.token.stage, "count": s.token.count}
+		st.append(entry)
+	var bl: Array = []
+	for b in belts:
+		var toks: Array = []
+		for t in b.tokens:
+			toks.append({"stage": t.stage, "count": t.count, "pos": t.pos})
+		bl.append(toks)
+	return {"stations": st, "belts": bl}
+
+
+## Restores a snapshot made by to_dict(). Call after set_params(). Anything
+## malformed is skipped, so a damaged snapshot just means an emptier line.
+func from_dict(d: Dictionary) -> void:
+	clear()
+	var st: Variant = d.get("stations", [])
+	var bl: Variant = d.get("belts", [])
+	if typeof(st) != TYPE_ARRAY or typeof(bl) != TYPE_ARRAY or st.size() != stations.size() or bl.size() != belts.size():
+		return
+	for i in stations.size():
+		var entry: Variant = st[i]
+		if typeof(entry) != TYPE_DICTIONARY or typeof(entry.get("token")) != TYPE_DICTIONARY:
+			continue
+		var t := _restore_token(entry["token"], i, i)
+		t.station = i
+		stations[i].token = t
+		stations[i].need = stations[i].work * t.count
+		stations[i].progress = clampf(float(entry.get("progress", 0.0)), 0.0, stations[i].need)
+	for i in belts.size():
+		if typeof(bl[i]) != TYPE_ARRAY:
+			continue
+		var limit := belts[i].length
+		for raw: Variant in bl[i]:
+			if typeof(raw) != TYPE_DICTIONARY or limit < 0.0:
+				continue
+			var t := _restore_token(raw, i + 1, i + 1)
+			t.belt = i
+			t.pos = clampf(float(raw.get("pos", 0.0)), 0.0, limit)
+			limit = t.pos - TOKEN_SPACING
+			belts[i].tokens.append(t)
+
+
+func _restore_token(raw: Dictionary, min_stage: int, max_stage: int) -> Token:
+	var t := Token.new()
+	t.id = _next_id
+	_next_id += 1
+	t.stage = clampi(int(raw.get("stage", min_stage)), min_stage, max_stage)
+	t.count = maxf(float(raw.get("count", 1.0)), 1.0)
+	return t
+
+
 func all_tokens() -> Array[Token]:
 	var out: Array[Token] = []
 	for s in stations:

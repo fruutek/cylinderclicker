@@ -3,6 +3,11 @@ extends RefCounted
 ## Everything that is persisted between sessions. Pure data - no logic beyond
 ## (de)serialisation, so the save format stays easy to version and extend.
 
+const DEFAULT_FACTORY_NAME := "My Cylinder Factory"
+const LEGACY_FACTORY_NAME := "Coppertop Cylinder Works"   # name shown before factories could be named
+const MAX_NAME_LENGTH := 24
+
+var factory_name: String = DEFAULT_FACTORY_NAME
 var cash: float = 0.0
 var lifetime_earned: float = 0.0
 var cylinders_made: float = 0.0
@@ -21,8 +26,21 @@ func level(id: String) -> int:
 	return int(upgrade_levels.get(id, 0))
 
 
+## Keeps only characters the pixel font can draw, trims, and enforces the
+## length limit. A blank result falls back to the default name.
+static func clean_name(raw: String) -> String:
+	var out := ""
+	for i in raw.length():
+		var code := raw.unicode_at(i)
+		if code >= 32 and code <= 126:
+			out += raw[i]
+	out = out.strip_edges().substr(0, MAX_NAME_LENGTH).strip_edges()
+	return out if not out.is_empty() else DEFAULT_FACTORY_NAME
+
+
 func to_dict() -> Dictionary:
 	return {
+		"factory_name": factory_name,
 		"cash": cash,
 		"lifetime_earned": lifetime_earned,
 		"cylinders_made": cylinders_made,
@@ -39,6 +57,7 @@ func to_dict() -> Dictionary:
 
 
 func from_dict(d: Dictionary) -> void:
+	factory_name = clean_name(str(d.get("factory_name", DEFAULT_FACTORY_NAME)))
 	cash = NumFmt.clamp_value(float(d.get("cash", 0.0)))
 	lifetime_earned = NumFmt.clamp_value(float(d.get("lifetime_earned", 0.0)))
 	cylinders_made = NumFmt.clamp_value(float(d.get("cylinders_made", 0.0)))

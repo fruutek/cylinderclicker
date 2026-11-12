@@ -5,7 +5,7 @@ set -euo pipefail
 GODOT="${1:-godot}"
 cd "$(dirname "$0")/.."
 SAVE="$(mktemp -d)/flow_save.json"
-ARGS=(--headless --path . -- "--save-path=$SAVE" --bot=res://tests/save_flow_bot.gd)
+ARGS=(--headless --path . -- "--save-path=$SAVE" --autostart --bot=res://tests/save_flow_bot.gd)
 P1=$("$GODOT" "${ARGS[@]}" 2>/dev/null | grep PHASE1)
 echo "$P1"
 # Pretend the game was closed two hours ago.

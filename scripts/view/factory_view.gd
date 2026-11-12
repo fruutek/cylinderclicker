@@ -221,8 +221,27 @@ func _draw_tokens() -> void:
 			TEX_ITEMS, Rect2(pos + Vector2(-9, 6 - ITEM_SIZE.y), ITEM_SIZE), Rect2(stage * ITEM_SIZE.x, 0, ITEM_SIZE.x, ITEM_SIZE.y))
 
 
+## Redraws the wall sign straight away (used when renaming while paused).
+func queue_sign_redraw() -> void:
+	_belt_layer.queue_redraw()
+
+
+## Paints the factory's name onto the timber sign on the back wall, in the
+## same style as the sign's original lettering.
+func _draw_sign() -> void:
+	var f := UiTheme.font()
+	var board_w := f.get_string_size(GameState.LEGACY_FACTORY_NAME.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE).x - 1.0
+	var left := floorf((SIZE.x - board_w) / 2.0) - 6.0
+	_belt_layer.draw_rect(Rect2(left + 3, 8, board_w + 6, 11), Color8(138, 90, 48))
+	var text := session.state.factory_name.to_upper()
+	var x := floorf((SIZE.x - (f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE).x - 1.0)) / 2.0)
+	_belt_layer.draw_string(f, Vector2(x, 18), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, Color8(98, 62, 34))
+	_belt_layer.draw_string(f, Vector2(x, 17), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, Color8(250, 188, 120))
+
+
 # ------------------------------------------------------------------ belts
 func _draw_belts() -> void:
+	_draw_sign()
 	var frame := int(_belt_scroll / 2.0) % 4
 	for j in range(1, _path.size()):
 		var a := _path[j - 1]
@@ -256,7 +275,7 @@ func _draw_overlay() -> void:
 	var line := session.line
 	if line.batch > 1.05:
 		# At high output each item on the belt stands for a whole batch.
-		UiTheme.draw_text(_overlay_layer, Vector2(26, 66), "Each item = %s cylinders" % NumFmt.number(line.batch, 1), UiTheme.CREAM)
+		UiTheme.draw_text(_overlay_layer, Vector2(26, 60), "Each item = %s cylinders" % NumFmt.number(line.batch, 1), UiTheme.CREAM)
 	for i in line.stations.size():
 		var st := line.stations[i]
 		var pos := layout.station_positions[i]

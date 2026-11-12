@@ -5,6 +5,8 @@ extends Control
 
 signal closed
 
+var esc_closes := true   # whether Escape dismisses this dialog
+
 var _panel: PanelContainer
 var _box: VBoxContainer
 var _buttons: HBoxContainer
@@ -71,6 +73,22 @@ func add_button(text: String, action: Callable = Callable(), closes: bool = true
 	if _buttons.get_parent() == null:
 		_box.add_child(_buttons)
 	_buttons.add_child(b)
+	return b
+
+
+## A full-width button stacked vertically (used for menu-style dialogs).
+func add_menu_button(text: String, action: Callable = Callable(), closes: bool = true) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(0, 18)
+	b.pressed.connect(func() -> void:
+		Sfx.play("blip")
+		if action.is_valid():
+			action.call()
+		if closes:
+			close())
+	_box.add_child(b)
 	return b
 
 

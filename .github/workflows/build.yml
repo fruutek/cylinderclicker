@@ -33,6 +33,9 @@ jobs:
       - name: Run save/load/offline flow test
         run: tests/run_save_flow.sh godot
 
+      - name: Run menu, naming, pause and save flow test
+        run: tests/run_menu_flow.sh godot | tee menu_flow.log && ! grep -q -E "FAIL|SCRIPT ERROR" menu_flow.log && test "$(grep -c 'PASS' menu_flow.log)" = 3
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

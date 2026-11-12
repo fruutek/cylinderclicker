@@ -23,6 +23,7 @@ var _music: AudioStreamPlayer
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # menu sounds and music keep playing while paused
 	for bus_name: String in ["SFX", "Music"]:
 		if AudioServer.get_bus_index(bus_name) == -1:
 			AudioServer.add_bus()
