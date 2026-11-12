@@ -4,7 +4,7 @@ extends RefCounted
 ## final = (base + sum(add)) * (1 + sum(add_pct)) * product(mul)
 
 
-static func compute(data: GameData, state: GameState) -> Dictionary:
+static func compute(data: FactoryDef, state: FactoryState) -> Dictionary:
 	var add := {}
 	var pct := {}
 	var mul := {}

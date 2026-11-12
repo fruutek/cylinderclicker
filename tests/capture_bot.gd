@@ -17,15 +17,16 @@ func _ready() -> void:
 		if arg.begins_with("--capture="):
 			out_dir = arg.trim_prefix("--capture=")
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	var s: GameSession = Game.session
+	var c: GameSession = Game.session
+	var s: FactorySim = c.factory("copper")
 	_plan = [
 		[0.5, func() -> void: _shot("01_intro")],
-		[0.7, func() -> void: _close_dialogs(); s.state.tutorial_step = 1],
+		[0.7, func() -> void: _close_dialogs(); c.state.tutorial_step = 1],
 		[6.0, func() -> void: _shot("02_first_clicks")],
 		[22.0, func() -> void: _shot("03_selling")],
 		[22.1, func() -> void:
-			s.state.cash += 400.0
-			s.state.lifetime_earned += 400.0
+			c.state.cash += 400.0
+			s.state.earned += 400.0
 			s.buy("hand_tools"); s.buy("machine_cut"); s.buy("machine_roll")
 			main.get("_shop").show_tab(1)],
 		[34.0, func() -> void: _shot("04_part_automated")],
@@ -33,7 +34,7 @@ func _ready() -> void:
 			for m: Dictionary in s.data.machines:
 				s.state.upgrade_levels[m["id"]] = 4
 			s.state.upgrade_levels["machine_weld"] = 1
-			s.state.lifetime_earned += 5000.0
+			s.state.earned += 5000.0
 			s.refresh()
 			s.upgrade_purchased.emit("machine_weld", 1)],
 		[60.0, func() -> void: _hover_row("machine_weld"); _shot_later("05_bottleneck_tooltip")],
@@ -52,13 +53,42 @@ func _ready() -> void:
 			s.refresh()
 			main.get("_shop").show_tab(1)],
 		[84.0, func() -> void: _shot("10_high_volume")],
-		[84.5, func() -> void: get_tree().quit()],
+		# --- stainless expansion
+		[84.2, func() -> void:
+			s.state.earned = 600000.0
+			c.state.cash = 400000.0
+			main.call("open_factory_overview")],
+		[85.0, func() -> void: _shot("11_overview_locked")],
+		[85.2, func() -> void: c.state.cash = 1500000.0],
+		[86.0, func() -> void: _shot("12_overview_affordable")],
+		[86.2, func() -> void: main.call("_confirm_build", "stainless")],
+		[86.8, func() -> void: _shot("13_build_confirm")],
+		[87.0, func() -> void: main.call("_build_factory", "stainless")],
+		[87.6, func() -> void: _shot("14_grand_opening")],
+		[88.0, func() -> void: _close_dialogs()],
+		[100.0, func() -> void: _shot("15_stainless_manual")],
+		[100.2, func() -> void:
+			var steel := c.factory("stainless")
+			for m: Dictionary in steel.data.machines:
+				steel.state.upgrade_levels[m["id"]] = 6
+			steel.state.upgrade_levels["machine_tig"] = 3
+			steel.state.earned = 400000.0
+			steel.refresh()
+			steel.upgrade_purchased.emit("machine_tig", 3)
+			main.get("_shop").show_tab(1)],
+		[150.0, func() -> void: _hover_row("machine_tig"); _shot_later("16_stainless_automated")],
+		[152.0, func() -> void: main.get("_shop").show_tab(0); _shot_later("17_stainless_upgrades")],
+		[154.0, func() -> void: main.get("_shop").show_tab(2); _shot_later("18_stainless_products")],
+		[156.0, func() -> void: main.call("open_factory_overview"); _shot_later("19_overview_both")],
+		[158.0, func() -> void: _close_dialogs(); main.call("switch_factory", "copper")],
+		[160.0, func() -> void: _shot("20_back_in_copper")],
+		[160.5, func() -> void: get_tree().quit()],
 	]
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if _t > 1.0 and _t < 34.0:
+	if (_t > 1.0 and _t < 34.0) or (_t > 88.0 and _t < 100.0):
 		_click_acc += delta * 5.0
 		while _click_acc >= 1.0:
 			_click_acc -= 1.0

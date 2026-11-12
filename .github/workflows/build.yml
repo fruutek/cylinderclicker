@@ -36,6 +36,9 @@ jobs:
       - name: Run menu, naming, pause and save flow test
         run: tests/run_menu_flow.sh godot | tee menu_flow.log && ! grep -q -E "FAIL|SCRIPT ERROR" menu_flow.log && test "$(grep -c 'PASS' menu_flow.log)" = 3
 
+      - name: Run stainless expansion flow test
+        run: tests/run_expansion_flow.sh godot | tee expansion_flow.log && ! grep -q -E "FAIL|SCRIPT ERROR" expansion_flow.log && test "$(grep -c 'PASS' expansion_flow.log)" = 3
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

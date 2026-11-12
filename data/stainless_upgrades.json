@@ -1,0 +1,43 @@
+{
+  "_comment": "Upgrades for the stainless plant only - they never affect the copper works. Same format as upgrades.json; 'unlock_at' counts money earned by this factory.",
+  "base_stats": {
+    "click_power": 1.0,
+    "click_boost": 0.05,
+    "sell_value": 1.0,
+    "material_cost": 1.0,
+    "manufacturing_cost": 1.0,
+    "machine_speed": 1.0,
+    "belt_speed": 48.0,
+    "offline_hours": 8.0
+  },
+  "upgrades": [
+    {"id": "torque_tools", "name": "Torque Tools", "icon": "hand_tools", "base_cost": 5000, "cost_growth": 1.6, "max_level": 25, "unlock_at": 0,
+     "desc": "Calibrated power tools for the crew: every click does more work at each station.",
+     "effect_text": "+4 work per click",
+     "effects": [{"stat": "click_power", "op": "add", "value": 4.0}]},
+    {"id": "mirror_finish", "name": "Mirror Finish", "icon": "s_finish", "base_cost": 60000, "cost_growth": 1.9, "max_level": 0, "unlock_at": 0,
+     "desc": "Electropolished shells and a premium badge. Installers pay more for them.",
+     "effect_text": "+20% sale price",
+     "effects": [{"stat": "sell_value", "op": "mul", "value": 1.2}]},
+    {"id": "servo_belts", "name": "Servo Conveyors", "icon": "conveyor", "base_cost": 40000, "cost_growth": 2.0, "max_level": 5, "unlock_at": 100000,
+     "desc": "Servo-driven belts move heavy vessels between cells sooner.",
+     "effect_text": "+20% belt speed",
+     "effects": [{"stat": "belt_speed", "op": "add_pct", "value": 0.2}]},
+    {"id": "steel_contract", "name": "Bulk Steel Contract", "icon": "s_steel", "base_cost": 150000, "cost_growth": 2.1, "max_level": 8, "unlock_at": 300000,
+     "desc": "Buy coil by the lorry-load. Every cylinder costs less in raw material.",
+     "effect_text": "-6% material cost",
+     "effects": [{"stat": "material_cost", "op": "mul", "value": 0.94}]},
+    {"id": "energy_recovery", "name": "Energy Recovery", "icon": "s_energy", "base_cost": 200000, "cost_growth": 2.1, "max_level": 8, "unlock_at": 600000,
+     "desc": "Recovers weld heat and argon. Cuts the cost of making each cylinder.",
+     "effect_text": "-8% manufacturing cost",
+     "effects": [{"stat": "manufacturing_cost", "op": "mul", "value": 0.92}]},
+    {"id": "supervisor", "name": "Shift Supervisor", "icon": "whistle", "base_cost": 400000, "cost_growth": 2.4, "max_level": 8, "unlock_at": 1000000,
+     "desc": "Keeps clicking worthwhile: each click also gives every machine a burst of extra output.",
+     "effect_text": "+5% machine burst per click",
+     "effects": [{"stat": "click_boost", "op": "add", "value": 0.05}]},
+    {"id": "smart_factory", "name": "Smart Factory Suite", "icon": "lean", "base_cost": 750000, "cost_growth": 2.3, "max_level": 0, "unlock_at": 2000000,
+     "desc": "Plant-wide scheduling software. Every machine in the plant runs faster.",
+     "effect_text": "+15% all machine speed",
+     "effects": [{"stat": "machine_speed", "op": "mul", "value": 1.15}]}
+  ]
+}

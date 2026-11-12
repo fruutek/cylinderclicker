@@ -7,7 +7,8 @@ const WIDTH := 196
 const ROW_H := 27
 const TABS: Array[String] = ["UPGRADES", "MACHINES", "PRODUCTS"]
 
-var session: GameSession
+var session: FactorySim          # the factory whose shop this is
+var company: GameState
 var _tab_buttons: Array[Button] = []
 var _pages: Array[Control] = []
 var _rows := {}                 # upgrade id -> row dictionary of nodes
@@ -22,8 +23,9 @@ var _current_tab := 0
 var _refresh_timer := 0.0
 
 
-func setup(p_session: GameSession, tooltip_parent: Node) -> void:
+func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node) -> void:
 	session = p_session
+	company = p_company
 	size = Vector2(WIDTH, 330)
 
 	var bg := Panel.new()
@@ -149,7 +151,7 @@ func refresh() -> void:
 		if not session.is_visible(id):
 			icon.texture = UiTheme.icon("lock")
 			name_label.text = "? ? ?"
-			sub.text = "Earn %s in total to reveal" % NumFmt.money(float(def["unlock_at"]))
+			sub.text = ("Earn %s in total to reveal" if session.data.index == 0 else "Earn %s here to reveal") % NumFmt.money(float(def["unlock_at"]))
 			cost.text = ""
 			lvl_label.text = ""
 			btn.modulate = Color(1, 1, 1, 0.6)
@@ -265,18 +267,18 @@ func _fill_tooltip(id: String) -> void:
 		var entry: Dictionary = _product_entries[id]
 		_tip_title.text = String(entry["name"]).to_upper()
 		_tip_body.text = entry["desc"]
-		if session.state.unlocked_products.has(entry["id"]):
+		if company.unlocked_products.has(entry["id"]):
 			_tip_detail.text = "In production."
 			_tip_detail.add_theme_color_override("font_color", UiTheme.GREEN)
 		else:
-			_tip_detail.text = "Locked - arrives in a future update."
+			_tip_detail.text = "Locked - build the factory that makes it (see FACTORIES)." if entry.has("factory") else "Locked - arrives in a future update."
 			_tip_detail.add_theme_color_override("font_color", UiTheme.RED)
 		return
 	var def: Dictionary = session.data.upgrade_by_id[id]
 	if not session.is_visible(id):
 		_tip_title.text = "LOCKED"
 		_tip_body.text = "Keep shipping cylinders to discover this upgrade."
-		_tip_detail.text = "Total earned: %s / %s" % [NumFmt.money(session.state.lifetime_earned), NumFmt.money(float(def["unlock_at"]))]
+		_tip_detail.text = "Earned here: %s / %s" % [NumFmt.money(session.state.earned), NumFmt.money(float(def["unlock_at"]))]
 		_tip_detail.add_theme_color_override("font_color", UiTheme.INK_SOFT)
 		return
 	var lvl := session.level(id)
@@ -316,12 +318,13 @@ func _build_products(page: Control) -> void:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.WOOD_DARK, 1, 4))
 	card.position = Vector2(0, 0)
-	card.size = Vector2(WIDTH - 8, 62)
+	card.size = Vector2(WIDTH - 8, 68)
+	card.clip_contents = true
 	page.add_child(card)
 	_product_card = UiTheme.label("")
 	card.add_child(_product_card)
 
-	var y := 66.0
+	var y := 72.0
 	var cat := session.catalog
 	for section: Array in [["MATERIALS", cat.materials()], ["RANGES", cat.ranges()], ["VARIANTS", cat.variants()]]:
 		var head := UiTheme.label(section[0], UiTheme.COPPER.darkened(0.25))
@@ -357,11 +360,13 @@ func _build_products(page: Control) -> void:
 func _refresh_products() -> void:
 	if _product_card == null or _current_tab != 2:
 		return
-	_product_card.text = "%s\nSale price   %s\nMaterials   -%s\nProfit each  %s" % [
+	var making := session.manufacturing_cost()
+	_product_card.text = "%s\nSale price   %s\nMaterials   -%s%s\nProfit each  %s" % [
 		String(session.product["name"]).to_upper(), NumFmt.money(session.sale_price()),
-		NumFmt.money(session.material_cost()), NumFmt.money(session.profit_per_cylinder())]
+		NumFmt.money(session.material_cost()), ("\nMaking      -%s" % NumFmt.money(making)) if making > 0.0 else "",
+		NumFmt.money(session.profit_per_cylinder())]
 	for key: String in _product_rows:
-		var unlocked: bool = session.state.unlocked_products.has(_product_entries[key]["id"])
+		var unlocked: bool = company.unlocked_products.has(_product_entries[key]["id"])
 		var row: Dictionary = _product_rows[key]
 		(row["status"] as Label).text = "IN PRODUCTION" if unlocked else "LOCKED"
 		(row["status"] as Label).add_theme_color_override("font_color", UiTheme.GREEN if unlocked else UiTheme.INK_SOFT)

@@ -45,7 +45,7 @@ func is_valid(spec: Dictionary) -> bool:
 	return true
 
 
-## Returns {name, value, material_cost, work_mult} for a product spec.
+## Returns {name, value, material_cost, manufacturing_cost, work_mult} for a product spec.
 func compose(spec: Dictionary) -> Dictionary:
 	if not is_valid(spec):
 		spec = starting_product()
@@ -54,16 +54,19 @@ func compose(spec: Dictionary) -> Dictionary:
 	var value := float(mat["value"]) * float(rng["value_mult"])
 	var cost := float(mat["material_cost"]) * float(rng["cost_mult"])
 	var work := float(mat["work_mult"]) * float(rng["work_mult"])
+	var making := float(mat.get("manufacturing_cost", 0.0)) * float(rng["cost_mult"])
 	var prefix := ""
 	for vid: String in spec.get("variants", []):
 		var v: Dictionary = _variants[vid]
 		value *= float(v["value_mult"])
 		cost *= float(v["cost_mult"])
+		making *= float(v["cost_mult"])
 		work *= float(v["work_mult"])
 		prefix += String(v["name"]) + " "
 	return {
 		"name": "%s%s %s" % [prefix, mat["name"], rng["name"]],
 		"value": value,
 		"material_cost": cost,
+		"manufacturing_cost": making,
 		"work_mult": work,
 	}

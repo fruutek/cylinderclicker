@@ -105,7 +105,8 @@ func _saved_state() -> Dictionary:
 
 # ----------------------------------------------------------------- phases
 func _phase_new_game() -> void:
-	var s: GameSession = Game.session
+	var c: GameSession = Game.session
+	var s: FactorySim = c.factory("copper")
 	check(_scene().name == "Menu", "game starts at the main menu")
 	check(not Game.active, "no factory is running behind the menu")
 	check(_find_button("Continue").disabled, "Continue is disabled with no save")
@@ -121,14 +122,14 @@ func _phase_new_game() -> void:
 	check(not _find_button("Open the factory").disabled, "valid name can be confirmed")
 	await _press("Open the factory")
 	await _wait_scene("Main")
-	check(s.state.factory_name == "Peter's Copper Cylinders", "factory has the chosen name")
+	check(c.state.factory_name == "Peter's Copper Cylinders", "factory has the chosen name")
 	check(Game.active, "factory is running")
 	check(str(_saved_state().get("factory_name", "")) == "Peter's Copper Cylinders", "new game is saved immediately")
 	await _shot("m03_intro_with_name")
 	await _press("Open the factory!")
 
 	# Play a little: buy machines and upgrades.
-	s.state.cash = 5000.0
+	c.state.cash = 5000.0
 	for m: Dictionary in s.data.machines:
 		s.buy(m["id"])
 		s.buy(m["id"])
@@ -141,20 +142,20 @@ func _phase_new_game() -> void:
 	_scene().call("open_pause_menu")
 	await _wait(0.3)
 	check(get_tree().paused, "pause menu pauses the game")
-	var t0 := s.state.play_seconds
+	var t0 := c.state.play_seconds
 	var made0 := s.state.cylinders_made
 	var line0 := JSON.stringify(s.line.to_dict())
 	await _wait(2.0)
-	check(s.state.play_seconds == t0 and s.state.cylinders_made == made0 and JSON.stringify(s.line.to_dict()) == line0,
+	check(c.state.play_seconds == t0 and s.state.cylinders_made == made0 and JSON.stringify(s.line.to_dict()) == line0,
 		"simulation is frozen while paused")
 	for text: String in ["Resume Game", "Save Game", "Settings", "Save & Return to Main Menu", "Quit to Desktop"]:
 		check(_find_button(text) != null, "pause menu has '%s'" % text)
 	await _shot("m05_pause_menu")
 
 	# Manual save.
-	s.state.cash += 123.0
+	c.state.cash += 123.0
 	await _press("Save Game")
-	near_cash("manual save writes the current cash", s.state.cash)
+	near_cash("manual save writes the current cash", c.state.cash)
 	var toast: Label = _scene().get("_save_toast")
 	check(toast.text == "Game saved", "save success message shown")
 	await _shot("m06_saved_feedback")
@@ -164,7 +165,7 @@ func _phase_new_game() -> void:
 	await _type_name("Taylor & Sons Cylinders")
 	await _shot("m07_rename")
 	await _press("Rename")
-	check(s.state.factory_name == "Taylor & Sons Cylinders", "factory renamed")
+	check(c.state.factory_name == "Taylor & Sons Cylinders", "factory renamed")
 
 	await _press("Settings")
 	await _shot("m08_settings")
@@ -173,7 +174,7 @@ func _phase_new_game() -> void:
 	await _press("Resume Game")
 	check(not get_tree().paused, "Resume unpauses")
 	await _wait(1.0)
-	check(s.state.play_seconds > t0, "production carries on after resuming")
+	check(c.state.play_seconds > t0, "production carries on after resuming")
 	await _shot("m09_renamed_sign")
 
 	# Autosave (no manual save from here on).
@@ -186,7 +187,7 @@ func _phase_new_game() -> void:
 	# Save & return to the main menu.
 	_scene().call("open_pause_menu")
 	await _wait(0.3)
-	var cash_at_exit := s.state.cash
+	var cash_at_exit := c.state.cash
 	await _press("Save & Return to Main Menu")
 	await _wait_scene("Menu")
 	check(not get_tree().paused and not Game.active, "back at the main menu, simulation stopped")
@@ -201,8 +202,8 @@ func _phase_new_game() -> void:
 	await _press("Keep my factory")
 	check(str(_saved_state().get("factory_name", "")) == "Taylor & Sons Cylinders", "declining keeps the existing save")
 	print("EXPECT cash=%.2f made=%.0f levels=%s tokens=%d" % [
-		float(_saved_state()["cash"]), float(_saved_state()["cylinders_made"]),
-		JSON.stringify(_saved_state()["upgrade_levels"]), s.line.all_tokens().size()])
+		float(_saved_state()["cash"]), float(_saved_state()["factories"]["copper"]["cylinders_made"]),
+		JSON.stringify(_saved_state()["factories"]["copper"]["upgrade_levels"]), s.line.all_tokens().size()])
 
 
 func near_cash(what: String, expected: float) -> void:
@@ -210,27 +211,28 @@ func near_cash(what: String, expected: float) -> void:
 
 
 func _phase_continue() -> void:
-	var s: GameSession = Game.session
+	var c: GameSession = Game.session
+	var s: FactorySim = c.factory("copper")
 	check(_scene().name == "Menu", "restart lands on the main menu")
 	var saved := _saved_state()
 	check(not _find_button("Continue").disabled, "Continue is enabled")
 	await _press("Continue")
 	await _wait_scene("Main")
-	check(s.state.factory_name == "Taylor & Sons Cylinders", "factory name restored")
-	check(s.state.cash >= float(saved["cash"]), "cash restored (%.2f saved, %.2f now)" % [float(saved["cash"]), s.state.cash])
+	check(c.state.factory_name == "Taylor & Sons Cylinders", "factory name restored")
+	check(c.state.cash >= float(saved["cash"]), "cash restored (%.2f saved, %.2f now)" % [float(saved["cash"]), c.state.cash])
 	check(s.level("finish") == 1 and s.level("hand_tools") == 1, "upgrades restored")
 	var all_two := true
 	for m: Dictionary in s.data.machines:
 		all_two = all_two and s.level(m["id"]) == 2
 	check(all_two, "machine levels restored")
 	check(s.all_automated() and is_equal_approx(s.steady_rate(), 0.25), "automation and production rate restored")
-	check(s.state.cylinders_made >= float(saved["cylinders_made"]), "cylinders made restored")
+	check(s.state.cylinders_made >= float(saved["factories"]["copper"]["cylinders_made"]), "cylinders made restored")
 	check(s.line.all_tokens().size() >= 6, "cylinders on the line restored (%d items)" % s.line.all_tokens().size())
 	var made := s.state.cylinders_made
 	await _wait(8.0)
 	check(s.state.cylinders_made > made, "factory keeps producing by itself after loading")
 	await _shot("m12_continued")
-	print("GOT cash=%.2f made=%.0f levels=%s" % [s.state.cash, s.state.cylinders_made, JSON.stringify(s.state.upgrade_levels)])
+	print("GOT cash=%.2f made=%.0f levels=%s" % [c.state.cash, s.state.cylinders_made, JSON.stringify(s.state.upgrade_levels)])
 
 
 func _phase_broken_save() -> void:

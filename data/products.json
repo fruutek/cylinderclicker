@@ -1,9 +1,9 @@
 {
-  "_comment": "Products are composed, not hard-coded: a product = material + range + any number of variants. Values multiply together, so 'Stainless Steel' + 'Pre-Plumbed' + 'Slimline' needs no extra data. 'available': false marks content planned for a later milestone (shown locked in game).",
+  "_comment": "Products are composed, not hard-coded: a product = material + range + any number of variants. Values multiply together, so 'Stainless Steel' + 'Pre-Plumbed' + 'Slimline' needs no extra data. 'manufacturing_cost' (optional) is labour and energy per cylinder, deducted with materials when it is sold. 'factory' names the factory that makes a part; 'available': false marks content planned for a later milestone (shown locked in game).",
   "materials": [
     {"id": "copper", "name": "Copper", "value": 12.0, "material_cost": 4.0, "work_mult": 1.0, "available": true,
      "desc": "The classic British copper cylinder. Simple, dependable, where every works begins."},
-    {"id": "stainless", "name": "Stainless Steel", "value": 150.0, "material_cost": 55.0, "work_mult": 2.5, "available": false,
+    {"id": "stainless", "name": "Stainless Steel", "value": 3600.0, "material_cost": 1200.0, "manufacturing_cost": 400.0, "work_mult": 1.0, "available": true, "factory": "stainless",
      "desc": "Unvented stainless cylinders. New materials, new machines, far better margins."}
   ],
   "ranges": [

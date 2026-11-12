@@ -22,7 +22,7 @@ static func settings(with_stats: bool) -> ModalDialog:
 	if with_stats:
 		d.add_text("Time played: %s    Clicks: %s\nTotal earned: %s\nBest output: %s cylinders/min" % [
 			NumFmt.duration(st.play_seconds), NumFmt.number(st.total_clicks), NumFmt.money(st.lifetime_earned),
-			NumFmt.number(st.best_rate_per_min, 1)], UiTheme.INK_SOFT)
+			NumFmt.number(Game.session.current().state.best_rate_per_min, 1)], UiTheme.INK_SOFT)
 		d.add_text("The game saves automatically every 30 seconds and when you quit.", UiTheme.INK_SOFT)
 	d.add_button("Done")
 	d.closed.connect(Game.save_settings)

@@ -7,7 +7,7 @@ extends RefCounted
 ## * Writes go to a temp file first and the previous save is kept as `.bak`,
 ##   so a crash mid-write cannot destroy progress.
 
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 const DEFAULT_PATH := "user://savegame.json"
 const GAME_ID := "cylinder_clicker"
 
@@ -94,6 +94,25 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				if not st1.has("factory_name"):
 					st1["factory_name"] = GameState.LEGACY_FACTORY_NAME
 				payload["version"] = 2
+			2:
+				# v3 introduced multiple factories. Everything that used to describe
+				# "the factory" becomes the copper factory; cash stays company-wide.
+				var st2: Variant = payload.get("state", {})
+				if typeof(st2) != TYPE_DICTIONARY:
+					return {}
+				var copper := {
+					"unlocked": true,
+					"upgrade_levels": st2.get("upgrade_levels", {}),
+					"cylinders_made": st2.get("cylinders_made", 0.0),
+					"earned": st2.get("lifetime_earned", 0.0),
+					"best_rate_per_min": st2.get("best_rate_per_min", 0.0),
+					"line": st2.get("line", {}),
+				}
+				for old_key: String in ["upgrade_levels", "cylinders_made", "best_rate_per_min", "line", "current_product"]:
+					st2.erase(old_key)
+				st2["factories"] = {"copper": copper}
+				st2["current_factory"] = "copper"
+				payload["version"] = 3
 			_:
 				return {}
 		version = int(payload.get("version", version + 1))

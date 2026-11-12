@@ -13,15 +13,17 @@ const HINTS := {
 	6: "FULLY AUTOMATED! Upgrade the slowest machine to lift the bottleneck. Clicking still speeds everything up. Enjoy!",
 }
 
-var session: GameSession
+var session: FactorySim          # the starting factory the hints talk about
+var company: GameState
 var _label: Label
 var _timer := 0.0
 var _shown_step := -1
 var _final_time := 0.0
 
 
-func setup(p_session: GameSession) -> void:
+func setup(p_session: FactorySim, p_company: GameState) -> void:
 	session = p_session
+	company = p_company
 	var sb := UiTheme.flat(Color("fbf1d6f2"), UiTheme.WOOD_DARK, 1, 5)
 	sb.border_width_left = 4
 	sb.border_color = UiTheme.COPPER.darkened(0.2)
@@ -43,14 +45,14 @@ func _process(delta: float) -> void:
 
 
 func _advance(dt: float) -> void:
-	var st := session.state
+	var st := company
 	var any_upgrade := false
 	for u: Dictionary in session.data.upgrades:
 		if session.level(u["id"]) > 0:
 			any_upgrade = true
 	match st.tutorial_step:
 		1:
-			if st.cylinders_made >= 1.0:
+			if session.state.cylinders_made >= 1.0:
 				st.tutorial_step = 2
 		2:
 			if any_upgrade or session.automated_count() > 0:
@@ -73,8 +75,8 @@ func _advance(dt: float) -> void:
 
 
 func _update() -> void:
-	var step := session.state.tutorial_step
-	visible = HINTS.has(step)
+	var step := company.tutorial_step
+	visible = HINTS.has(step) and company.current_factory == session.data.id
 	if step != _shown_step and visible:
 		if _shown_step != -1:
 			Sfx.play("blip")

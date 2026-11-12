@@ -1,17 +1,13 @@
 class_name FactoryView
 extends Node2D
-## Draws the factory floor. This is purely a *view* of GameSession: it reads
+## Draws one factory floor. This is purely a *view* of a FactorySim: it reads
 ## the simulation every frame and never changes it. Tokens are drawn from a
 ## single canvas item (no node per cylinder), and because the simulation
 ## batches cylinders at high output, the draw count stays small forever.
 
-const TEX_BG := preload("res://assets/sprites/factory_bg.png")
-const TEX_ITEMS := preload("res://assets/sprites/items.png")
 const TEX_BELT_H := preload("res://assets/sprites/belt_h.png")
 const TEX_BELT_V := preload("res://assets/sprites/belt_v.png")
 const TEX_CORNER := preload("res://assets/sprites/belt_corner.png")
-const TEX_VAN := preload("res://assets/sprites/van.png")
-const TEX_WORKER := preload("res://assets/sprites/worker.png")
 const TEX_CABINET := preload("res://assets/sprites/cabinet.png")
 const TEX_BEACON := preload("res://assets/sprites/beacon.png")
 const TEX_WARN := preload("res://assets/sprites/warn.png")
@@ -19,11 +15,20 @@ const TEX_WARN := preload("res://assets/sprites/warn.png")
 const SIZE := Vector2(444, 330)
 const MACHINE_ORIGIN := Vector2(-24, -46)
 const ITEM_SIZE := Vector2(18, 22)
-const VAN_POS := Vector2(-2, 218)
 const MAX_PARTICLES := 240
 
-var session: GameSession
+var session: FactorySim          # the factory being shown
+var company: GameState           # for the company/factory name on the sign
 var layout: LineLayout
+
+var _tex_items: Texture2D
+var _van_pos := Vector2(-2, 218)
+var _batch_label_pos := Vector2(26, 60)
+var _sign_fill := Color8(138, 90, 48)
+var _sign_text := Color8(250, 188, 120)
+var _sign_shadow := Color8(98, 62, 34)
+var _stage_max := 6
+var _first_update := true
 
 var _belt_layer: Node2D
 var _token_layer: Node2D
@@ -47,12 +52,35 @@ var _pending_timer := 0.0
 var _path: Array[Vector2] = []   # full conveyor centre line, station to station
 
 
-func setup(p_session: GameSession) -> void:
+func _sprite(key: String, fallback: String) -> Texture2D:
+	return load("res://assets/sprites/%s.png" % session.data.view.get(key, fallback))
+
+
+static func _rgb(a: Array) -> Color:
+	return Color8(int(a[0]), int(a[1]), int(a[2]))
+
+
+func setup(p_session: FactorySim, p_company: GameState) -> void:
 	session = p_session
+	company = p_company
 	layout = session.layout
+	# Each factory can name its own sprites and sign colours in its stations
+	# file ("view"); the defaults are the original copper works.
+	var view: Dictionary = session.data.view
+	_tex_items = _sprite("items", "items")
+	_stage_max = session.data.stations.size()
+	if view.has("vehicle_pos"):
+		_van_pos = Vector2(float(view["vehicle_pos"][0]), float(view["vehicle_pos"][1]))
+	if view.has("batch_label_pos"):
+		_batch_label_pos = Vector2(float(view["batch_label_pos"][0]), float(view["batch_label_pos"][1]))
+	var sign_style: Dictionary = view.get("sign", {})
+	if sign_style.has("fill"):
+		_sign_fill = _rgb(sign_style["fill"])
+		_sign_text = _rgb(sign_style["text"])
+		_sign_shadow = _rgb(sign_style["shadow"])
 
 	var bg := Sprite2D.new()
-	bg.texture = TEX_BG
+	bg.texture = _sprite("background", "factory_bg")
 	bg.centered = false
 	add_child(bg)
 
@@ -66,9 +94,9 @@ func setup(p_session: GameSession) -> void:
 		add_child(back)
 
 	_van = Sprite2D.new()
-	_van.texture = TEX_VAN
+	_van.texture = _sprite("vehicle", "van")
 	_van.centered = false
-	_van.position = VAN_POS
+	_van.position = _van_pos
 	add_child(_van)
 
 	_token_layer = _make_layer(_draw_tokens)
@@ -82,7 +110,7 @@ func setup(p_session: GameSession) -> void:
 		front.position = pos + MACHINE_ORIGIN
 		add_child(front)
 		_fronts.append(front)
-		_workers.append(_make_sprite(TEX_WORKER, 3, pos + Vector2(-27, 12)))
+		_workers.append(_make_sprite(_sprite("worker", "worker"), 3, pos + Vector2(-27, 12)))
 		_cabinets.append(_make_sprite(TEX_CABINET, 2, pos + Vector2(-27, 12)))
 		_beacons.append(_make_sprite(TEX_BEACON, 2, pos + Vector2(12, -53)))
 		_worker_timers.append(0.0)
@@ -151,7 +179,7 @@ func _process(delta: float) -> void:
 		_beacons[i].frame = (int(_time * 3.0 + i) % 2) if working else 0
 
 	_van_bob = maxf(_van_bob - delta, 0.0)
-	_van.position = VAN_POS + Vector2(0, 1 if _van_bob > 0.08 else 0)
+	_van.position = _van_pos + Vector2(0, 1 if _van_bob > 0.08 else 0)
 
 	_pending_timer -= delta
 	if _pending_cash > 0.0 and _pending_timer <= 0.0:
@@ -195,13 +223,15 @@ func _update_tokens(delta: float) -> void:
 			pos = _token_pos[t.id]
 			pos = target if pos.distance_to(target) > 90.0 else pos.move_toward(target, max_step)
 		else:
-			# Fresh raw sheets slide in from the stock pallet.
-			pos = layout.stock_pos if t.stage == 0 else target
+			# Fresh raw sheets slide in from the stock pallet (but when the view
+			# has only just opened, everything simply appears where it is).
+			pos = layout.stock_pos if t.stage == 0 and not _first_update else target
 		_token_pos[t.id] = pos
 		seen[t.id] = true
 	for id: int in _token_pos.keys():
 		if not seen.has(id):
 			_token_pos.erase(id)
+	_first_update = false
 
 
 func _draw_tokens() -> void:
@@ -216,9 +246,9 @@ func _draw_tokens() -> void:
 		var stage := t.stage
 		if t.station >= 0 and session.line.stations[t.station].fraction() >= 0.55:
 			stage += 1   # show the result once the station is mostly done
-		stage = clampi(stage, 0, 6)
+		stage = clampi(stage, 0, _stage_max)
 		_token_layer.draw_texture_rect_region(
-			TEX_ITEMS, Rect2(pos + Vector2(-9, 6 - ITEM_SIZE.y), ITEM_SIZE), Rect2(stage * ITEM_SIZE.x, 0, ITEM_SIZE.x, ITEM_SIZE.y))
+			_tex_items, Rect2(pos + Vector2(-9, 6 - ITEM_SIZE.y), ITEM_SIZE), Rect2(stage * ITEM_SIZE.x, 0, ITEM_SIZE.x, ITEM_SIZE.y))
 
 
 ## Redraws the wall sign straight away (used when renaming while paused).
@@ -232,11 +262,11 @@ func _draw_sign() -> void:
 	var f := UiTheme.font()
 	var board_w := f.get_string_size(GameState.LEGACY_FACTORY_NAME.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE).x - 1.0
 	var left := floorf((SIZE.x - board_w) / 2.0) - 6.0
-	_belt_layer.draw_rect(Rect2(left + 3, 8, board_w + 6, 11), Color8(138, 90, 48))
-	var text := session.state.factory_name.to_upper()
+	_belt_layer.draw_rect(Rect2(left + 3, 8, board_w + 6, 11), _sign_fill)
+	var text := company.factory_name.to_upper()
 	var x := floorf((SIZE.x - (f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE).x - 1.0)) / 2.0)
-	_belt_layer.draw_string(f, Vector2(x, 18), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, Color8(98, 62, 34))
-	_belt_layer.draw_string(f, Vector2(x, 17), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, Color8(250, 188, 120))
+	_belt_layer.draw_string(f, Vector2(x, 18), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, _sign_shadow)
+	_belt_layer.draw_string(f, Vector2(x, 17), text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.FONT_SIZE, _sign_text)
 
 
 # ------------------------------------------------------------------ belts
@@ -275,7 +305,7 @@ func _draw_overlay() -> void:
 	var line := session.line
 	if line.batch > 1.05:
 		# At high output each item on the belt stands for a whole batch.
-		UiTheme.draw_text(_overlay_layer, Vector2(26, 60), "Each item = %s cylinders" % NumFmt.number(line.batch, 1), UiTheme.CREAM)
+		UiTheme.draw_text(_overlay_layer, _batch_label_pos, "Each item = %s cylinders" % NumFmt.number(line.batch, 1), UiTheme.CREAM)
 	for i in line.stations.size():
 		var st := line.stations[i]
 		var pos := layout.station_positions[i]
@@ -323,6 +353,13 @@ func burst(at: Vector2, count: int, color: Color, speed: float = 60.0, gravity: 
 			"pos": at, "vel": Vector2(cos(ang), sin(ang) * 0.8 - 0.5) * speed * randf_range(0.4, 1.0),
 			"gravity": gravity, "age": 0.0, "life": life * randf_range(0.6, 1.0), "color": color, "size": 1.0 if randf() < 0.6 else 2.0,
 		})
+
+
+## Confetti for a grand opening.
+func celebrate() -> void:
+	var colours: Array[Color] = [UiTheme.GOLD, Color("8fc8e8"), Color("9ff0a0"), Color("ff8a70"), Color.WHITE]
+	for n in 5:
+		burst(Vector2(60 + n * 80, 90), 34, colours[n], 150.0, 170.0, 1.6)
 
 
 ## Feedback for a click on the factory floor at `at` (local coordinates).

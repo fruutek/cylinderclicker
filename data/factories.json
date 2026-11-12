@@ -1,0 +1,34 @@
+{
+  "_comment": "Every factory building the company can own, in unlock order. Each has its own stations file (the production line, machine costs and floor layout) and upgrades file. A factory with no 'unlock' block is owned from the start. Unlock requirement types: 'all_automated' {factory} and 'earned' {factory, amount}. To add a factory: add an entry here, write its two JSON files and its sprites.",
+  "factories": [
+    {
+      "id": "copper",
+      "name": "Copper Cylinder Works",
+      "short_name": "Copper Works",
+      "description": "Where it all began: a small line turning copper sheet into classic hot water cylinders.",
+      "hud_product": "Copper Cylinder",
+      "thumbnail": "factory_thumb_copper",
+      "product": {"material": "copper", "range": "standard", "variants": []},
+      "stations_file": "res://data/stations.json",
+      "upgrades_file": "res://data/upgrades.json"
+    },
+    {
+      "id": "stainless",
+      "name": "Stainless Steel Plant",
+      "short_name": "Stainless Plant",
+      "description": "A modern plant building unvented stainless steel cylinders. Eight stages, costly to equip, and far more valuable per cylinder.",
+      "hud_product": "Stainless Cylinder",
+      "thumbnail": "factory_thumb_stainless",
+      "product": {"material": "stainless", "range": "standard", "variants": []},
+      "stations_file": "res://data/stainless_stations.json",
+      "upgrades_file": "res://data/stainless_upgrades.json",
+      "unlock": {
+        "cost": 1000000,
+        "requires": [
+          {"type": "all_automated", "factory": "copper"},
+          {"type": "earned", "factory": "copper", "amount": 500000}
+        ]
+      }
+    }
+  ]
+}

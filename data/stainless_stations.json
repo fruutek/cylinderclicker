@@ -1,0 +1,32 @@
+{
+  "_comment": "The stainless steel line: eight stages. Stainless is slow, heavy work - each stage needs far more effort than copper, and each machine supplies 4 work/sec per level. See stations.json for field meanings. 'view' selects this factory's sprites and sign style.",
+  "layout": {"dispatch_pos": [66, 252], "stock_pos": [36, 126], "station_half_width": 14},
+  "view": {
+    "background": "factory_bg_stainless",
+    "items": "items_stainless",
+    "vehicle": "lorry",
+    "vehicle_pos": [0, 218],
+    "worker": "worker_steel",
+    "sign": {"fill": [52, 66, 84], "text": [226, 236, 244], "shadow": [28, 36, 50]},
+    "batch_label_pos": [12, 60]
+  },
+  "milestones": [[10, 2.0], [25, 2.0], [50, 2.0], [100, 2.0], [150, 2.0], [200, 2.0]],
+  "stations": [
+    {"id": "prep", "pos": [84, 128], "sprite": "s_prep", "icon": "s_prep", "name": "Sheet Prep", "machine_name": "Auto Decoiler", "work": 24.0, "base_rate": 4.0, "machine_cost": 6000, "cost_growth": 1.22,
+     "desc": "Unrolls, levels and degreases stainless coil ready for the laser."},
+    {"id": "laser", "pos": [178, 128], "sprite": "s_laser", "icon": "s_laser", "name": "Laser Cut", "machine_name": "Fibre Laser Cutter", "work": 32.0, "base_rate": 4.0, "machine_cost": 9000, "cost_growth": 1.22,
+     "desc": "A CNC laser cuts shell blanks and port holes with no hand marking-out."},
+    {"id": "form", "pos": [272, 128], "sprite": "s_form", "icon": "s_form", "name": "Rolling", "machine_name": "CNC Plate Rolls", "work": 40.0, "base_rate": 4.0, "machine_cost": 12000, "cost_growth": 1.22,
+     "desc": "Programmable rolls form each blank into a true round shell."},
+    {"id": "tig", "pos": [366, 128], "path_after": [[420, 128], [420, 252]], "sprite": "s_tig", "icon": "s_tig", "name": "TIG Weld", "machine_name": "Orbital TIG Welder", "work": 64.0, "base_rate": 4.0, "machine_cost": 22000, "cost_growth": 1.22,
+     "desc": "Welds the seam and both domed ends under argon. The slowest job in the plant."},
+    {"id": "coil", "pos": [366, 252], "sprite": "s_coil", "icon": "s_coil", "name": "Coil Fit", "machine_name": "Coil Insertion Arm", "work": 56.0, "base_rate": 4.0, "machine_cost": 18000, "cost_growth": 1.22,
+     "desc": "Installs the internal heating coil and welds in the connections."},
+    {"id": "qa", "pos": [280, 252], "sprite": "s_qa", "icon": "s_qa", "name": "Testing", "machine_name": "Pressure Test Cell", "work": 48.0, "base_rate": 4.0, "machine_cost": 15000, "cost_growth": 1.22,
+     "desc": "Pressure-tests each vessel and scans every weld automatically."},
+    {"id": "case", "pos": [194, 252], "sprite": "s_case", "icon": "s_case", "name": "Casing", "machine_name": "Foam & Casing Cell", "work": 40.0, "base_rate": 4.0, "machine_cost": 12000, "cost_growth": 1.22,
+     "desc": "Injects the light blue insulation and fits the outer casing rings."},
+    {"id": "ship", "pos": [124, 252], "sprite": "s_ship", "icon": "s_ship", "name": "Packing", "machine_name": "Inspect & Pack Cell", "work": 32.0, "base_rate": 4.0, "machine_cost": 9000, "cost_growth": 1.22,
+     "desc": "Final inspection, then boxed and strapped for the lorry."}
+  ]
+}

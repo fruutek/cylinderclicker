@@ -22,6 +22,7 @@ const OUTLINE := Color("2b1f2b")
 const FONT_SIZE := 8
 const ICON_NAMES: Array[String] = [
 	"hand_tools", "finish", "conveyor", "whistle", "lean", "cut", "roll", "weld", "test", "foam", "pack", "lock", "product",
+	"s_prep", "s_laser", "s_form", "s_tig", "s_coil", "s_qa", "s_case", "s_ship", "s_finish", "s_steel", "s_energy",
 ]
 
 static var _font: FontFile

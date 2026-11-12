@@ -6,7 +6,9 @@ watch the factory slowly learn to run itself.
 
 Built with **Godot 4.7 + GDScript**. Fully offline, local saves only, no third-party assets.
 
-![The factory part-way through automation](docs/screenshot_factory.png)
+![The copper works part-way through automation](docs/screenshot_factory.png)
+
+![The stainless steel plant](docs/screenshot_stainless.png)
 
 ## How to play it
 
@@ -34,10 +36,20 @@ To make your own exe from the editor: *Project > Export > Windows Desktop > Expo
 | Click a shop row | Buy that upgrade / machine |
 | Hover a shop row | Tooltip with what it does and what the next level gives |
 | **1 / 2 / 3** | Upgrades / Machines / Products tabs |
+| **F** or the FACTORIES button | Factory overview: see every factory, switch between them, build new ones |
 | **Esc** or the gear button | Pause menu (resume, save, settings, rename factory, return to main menu, quit) |
 | **F11** | Toggle fullscreen |
 
-## What is in this first playable version
+## What is in the game
+
+- **Two factories.** The Copper Cylinder Works you start with, and the Stainless Steel Plant: a
+  second building with its own eight-stage line (Sheet Prep, Laser Cut, Rolling, TIG Weld, Coil
+  Fit, Testing, Casing, Packing), its own machines, upgrades, artwork and statistics. It costs
+  £1,000,000 to build once the copper works is fully automated and has earned £500,000.
+- Every factory you own keeps producing whichever one is on screen, and all sales go into one
+  company cash balance. Offline earnings cover every automated factory.
+- Stainless cylinders sell for far more but carry material and manufacturing costs, take much
+  longer to build and need expensive machines - slow at first, more profitable in the long run.
 
 - One copper cylinder production line with six stations: Cutting, Rolling, Welding,
   Pressure Test, Insulation, Packing, then dispatch to the van.
@@ -70,12 +82,15 @@ To make your own exe from the editor: *Project > Export > Windows Desktop > Expo
 
 ```
 data/        JSON definitions - edit these to rebalance or add content
-  stations.json   the stages of the line, their work, machine costs and floor positions
-  upgrades.json   upgrades and their modular stat effects
+  factories.json  the factory buildings, their unlock requirements and cost
+  stations.json / upgrades.json                      the copper works' line and upgrades
+  stainless_stations.json / stainless_upgrades.json  the stainless plant's line and upgrades
   products.json   materials x ranges x variants (products are composed, not hard-coded)
 scripts/core/     pure game logic - no nodes, no rendering (fully unit-tested)
   production_line.gd   deterministic line simulation (stations, belts, batching)
-  game_session.gd      state + economy + offline progress
+  game_session.gd      the company: shared cash, every factory, unlocking, offline progress
+  factory_sim.gd       one factory: its upgrades, economy and production line
+  factory_def.gd       a factory's data definition; factory_state.gd its saved state
   stat_block.gd        turns upgrade levels into stats
   product_catalog.gd   composes products from parts
   save_manager.gd      versioned saves with migration and backup
@@ -91,8 +106,11 @@ tests/            headless tests, a balancing bot and a screenshot bot
 
 ### Architecture notes
 
-- **Simulation is separate from rendering.** `GameSession` and `ProductionLine` never touch
-  the scene tree; `FactoryView` only reads them. The same logic runs in the game, the tests
+- **Simulation is separate from rendering.** `GameSession`, `FactorySim` and `ProductionLine`
+  never touch the scene tree; `FactoryView` only reads the one factory on screen. All unlocked
+  factories are ticked every step, so switching view cannot lose or duplicate production.
+- **Adding a factory is mostly data:** an entry in `factories.json`, a stations file, an upgrades
+  file and its sprites (named in the stations file's `view` block). The same logic runs in the game, the tests
   and the balancing bot.
 - **Scaling.** A token on the belt is a *batch* of cylinders. Early on a batch is exactly one
   cylinder. When machines could exceed about two items per second, each new item carries
@@ -113,8 +131,10 @@ godot --headless --path . --import                 # first time only
 godot --headless --path . -s tests/run_tests.gd    # logic tests
 tests/run_save_flow.sh                             # real save > quit > load > offline flow
 tests/run_menu_flow.sh                             # menus, naming, pause, saving and restart, end to end
+tests/run_expansion_flow.sh                        # old save > build stainless > switch > restart > offline
 godot --headless --path . -s tests/balance_bot.gd  # pacing report from a simulated player
 python3 tools/gen_art.py                           # regenerate sprites (needs Pillow)
+python3 tools/gen_art_stainless.py                 # regenerate the stainless plant sprites
 python3 tools/gen_font.py                          # regenerate the pixel font
 python3 tools/gen_audio.py                         # regenerate audio (needs numpy; music is then converted to .ogg with ffmpeg)
 ```
@@ -128,8 +148,6 @@ The game runs on the Godot Engine (MIT licence).
 
 ## Roadmap (not in this version)
 
-- Tier 2+ products: Thermal Stores, Stainless Steel, Pre-Plumbed and the specialist variants,
-  with their extra stations and materials.
-- Additional production lines and a larger factory floor.
+- More factories: Thermal Stores, Pre-Plumbed and the specialist variants.
 - Supplier purchasing and negotiation for material costs.
 - Buy-multiple buttons, achievements, more ambience and animation.

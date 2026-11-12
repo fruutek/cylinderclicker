@@ -11,9 +11,8 @@ var dispatch_pos := Vector2.ZERO
 var stock_pos := Vector2.ZERO
 
 
-func _init(data: GameData) -> void:
-	var raw := GameData.load_json(GameData.STATIONS_PATH)
-	var layout: Dictionary = raw.get("layout", {})
+func _init(data: FactoryDef) -> void:
+	var layout: Dictionary = data.layout
 	var half := float(layout.get("station_half_width", 14))
 	dispatch_pos = _vec(layout.get("dispatch_pos", [0, 0]))
 	stock_pos = _vec(layout.get("stock_pos", [0, 0]))
