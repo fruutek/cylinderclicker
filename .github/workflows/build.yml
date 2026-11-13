@@ -147,6 +147,30 @@ jobs:
           name: android-emulator-test
           path: android-test-output
 
+      # Add "[android-screenshots]" to a commit message to have the real emulator
+      # screenshots (half size) and app log committed to docs/android on this branch.
+      - name: Commit emulator screenshots to docs/android (on request)
+        if: always() && contains(github.event.head_commit.message, '[android-screenshots]')
+        run: |
+          pip install -q pillow
+          mkdir -p docs/android && rm -f docs/android/*.png
+          python3 - <<'PY'
+          import glob, os
+          from PIL import Image
+          for f in sorted(glob.glob("android-test-output/*.png")):
+              try:
+                  im = Image.open(f).convert("RGB")
+                  im.resize((im.width // 2, im.height // 2), Image.LANCZOS).save(os.path.join("docs/android", os.path.basename(f)), optimize=True)
+              except Exception as e:
+                  print("skipped", f, e)
+          PY
+          grep -v -E "^\s*$" android-test-output/godot.log | head -400 > docs/android/emulator-log.txt || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/android
+          git commit -m "Add Android emulator screenshots from CI run ${{ github.run_number }}" || exit 0
+          git push origin "HEAD:${{ github.ref_name }}"
+
   release:
     name: Publish release
     needs: [windows, android, android-emulator-test]
