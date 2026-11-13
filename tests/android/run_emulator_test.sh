@@ -13,9 +13,9 @@ LOG="$OUT/godot.log"
 
 adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install -r "$APK" || exit 1
-# A 1080p-class phone screen keeps the software-rendered emulator responsive.
-adb shell wm size 1080x2400
-adb shell wm density 420
+# A modest screen size keeps the software-rendered emulator responsive.
+adb shell wm size 720x1600
+adb shell wm density 280
 adb shell wm size; adb shell wm density
 # Emulators have a "hardware keyboard"; ask Android to show the on-screen one anyway, as on a phone.
 adb shell settings put secure show_ime_with_hard_keyboard 1
@@ -54,7 +54,7 @@ follow() {
 }
 
 adb shell am start -n "$ACT"
-follow "PHASE DONE" 420; P1=$?
+follow "PHASE DONE" 1200; P1=$?
 adb exec-out screencap -p > "$OUT/a17_before_home.png"
 # Send the app to the background the way a player would, then kill it.
 adb shell input keyevent KEYCODE_HOME
@@ -68,11 +68,11 @@ for attempt in 1 2 3 4 5; do
 done
 
 adb shell am start -n "$ACT"
-follow "BG READY" 240; P2=$?
+follow "BG READY" 600; P2=$?
 adb shell input keyevent KEYCODE_HOME
 sleep 6
 adb shell am start -n "$ACT"
-follow "ANDROID TEST DONE" 120; P3=$?
+follow "ANDROID TEST DONE" 300; P3=$?
 
 kill $LOGCAT_PID 2>/dev/null
 echo "=================== app log ==================="
