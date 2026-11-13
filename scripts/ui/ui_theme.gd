@@ -25,6 +25,7 @@ const ICON_NAMES: Array[String] = [
 	"s_prep", "s_laser", "s_form", "s_tig", "s_coil", "s_qa", "s_case", "s_ship", "s_finish", "s_steel", "s_energy",
 ]
 
+static var touch := false       # finger-sized controls (set by Game before any UI is built)
 static var _font: FontFile
 static var _theme: Theme
 static var _icons := {}
@@ -111,8 +112,8 @@ static func theme() -> Theme:
 	var fill := flat(COPPER, WOOD_DARK, 1, 0)
 	t.set_stylebox("grabber_area", "HSlider", fill)
 	t.set_stylebox("grabber_area_highlight", "HSlider", fill)
-	var grab := _solid_tex(6, 12, PARCH_LIGHT, WOOD_DARK)
-	var grab_hi := _solid_tex(6, 12, Color.WHITE, COPPER)
+	var grab := _solid_tex(12 if touch else 6, 20 if touch else 12, PARCH_LIGHT, WOOD_DARK)
+	var grab_hi := _solid_tex(12 if touch else 6, 20 if touch else 12, Color.WHITE, COPPER)
 	t.set_icon("grabber", "HSlider", grab)
 	t.set_icon("grabber_highlight", "HSlider", grab_hi)
 	t.set_icon("grabber_disabled", "HSlider", grab)
@@ -130,6 +131,11 @@ static func theme() -> Theme:
 	t.set_constant("separation", "HBoxContainer", 4)
 	_theme = t
 	return t
+
+
+## Minimum height of a tappable button.
+static func button_height(desktop: int = 18) -> int:
+	return maxi(desktop, 28) if touch else desktop
 
 
 static func label(text: String, color: Color = INK, size: int = FONT_SIZE) -> Label:

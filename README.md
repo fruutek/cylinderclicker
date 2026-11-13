@@ -4,7 +4,8 @@ A cosy 2D pixel-art factory idle game. You run **Coppertop Cylinder Works**, a s
 hot water cylinder factory that you name yourself: click to work the line, sell copper cylinders, buy machines and
 watch the factory slowly learn to run itself.
 
-Built with **Godot 4.7 + GDScript**. Fully offline, local saves only, no third-party assets.
+Built with **Godot 4.7 + GDScript**. Runs on **Windows** and **Android** (landscape) from the same
+code. Fully offline, local saves only, no ads, no accounts, no third-party assets.
 
 ![The copper works part-way through automation](docs/screenshot_factory.png)
 
@@ -12,23 +13,59 @@ Built with **Godot 4.7 + GDScript**. Fully offline, local saves only, no third-p
 
 ## How to play it
 
-**Option A - download the ready-made Windows build (easiest)**
+**Easiest: download from the Releases page**
 
-1. On GitHub open the **Actions** tab, pick the latest green *Test and build Windows game* run.
-2. Download the **CylinderClicker-windows** artifact, unzip it and double-click `CylinderClicker.exe`.
-   Windows may show a "Windows protected your PC" notice because the exe is not code-signed:
-   choose *More info* > *Run anyway*.
+Open the repository's **Releases** page on GitHub and pick the latest release.
 
-**Option B - run from the project**
+- **Android phone or tablet:** download `CylinderClicker-<version>-android.apk` on the phone and open
+  it. The first time, Android asks you to allow your browser (or Files app) to install apps - allow
+  it, then tap Install. The game is landscape only, needs no permissions and works offline.
+- **Windows:** download `CylinderClicker-<version>-windows.zip`, unzip it and double-click
+  `CylinderClicker.exe`. Windows may show a "Windows protected your PC" notice because the exe is
+  not code-signed: choose *More info* > *Run anyway*.
+
+Every push also builds both versions: open the **Actions** tab, pick the latest green run and
+download the `CylinderClicker-android` or `CylinderClicker-windows` artifact.
+
+**Run from the project**
 
 1. Download Godot **4.7.x** (standard version) from <https://godotengine.org/download/windows/>.
    It is a single exe - no installer.
 2. Start Godot, choose **Import**, select this folder's `project.godot`, then press **F5**.
 
-To make your own exe from the editor: *Project > Export > Windows Desktop > Export Project*
-(Godot will offer to download the export templates the first time).
+### Moving a save between Windows and Android
+
+Saves are stored separately on each device (`%APPDATA%\CylinderClicker\savegame.json` on Windows,
+the app's private storage on Android). To carry a factory across:
+
+1. On the old device open the main menu, choose **Transfer Save** > **Copy save code**.
+2. Paste the code into an email or message to yourself.
+3. On the new device copy that code, open **Transfer Save** and choose **Paste save code**.
+
+The old device keeps its save; nothing is deleted.
+
+### Android signing
+
+Android only lets a new APK update an installed one if both are signed with the same key. The
+release APKs are signed with the project's permanent key, which is **not** stored in this
+repository. To let GitHub sign builds with it, add these repository secrets
+(Settings > Secrets and variables > Actions):
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the keystore file, base64-encoded |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `cylinderclicker` |
+
+Without them, builds from the Actions tab are signed with a throw-away key and named
+`...-android-testkey.apk`; a Release then publishes the pre-signed APK from `releases/android/`
+for that version if there is one. Once the secrets are set, `releases/android/` is no longer needed.
 
 ## Controls
+
+On Android everything is done by touch: tap the factory to work (two thumbs both count), tap a
+shop row to buy, **press and hold a row** for its details, drag the shop to scroll, and use the
+phone's **Back** button or gesture for the pause menu.
 
 | Input | Action |
 | --- | --- |
@@ -119,6 +156,9 @@ tests/            headless tests, a balancing bot and a screenshot bot
 - **Big numbers.** Values are 64-bit floats (up to about 1e308), clamped at 1e300 and always
   formatted through `NumFmt`. If that is ever outgrown, only `NumFmt` and the arithmetic in
   `GameSession` need to change.
+- **One game, two platforms.** Android uses the same scenes and scripts. The layout is computed
+  from the screen size (640x360 gives the desktop arrangement exactly; a phone's wider screen
+  gives the shop more room), and `UiTheme.touch` switches on finger-sized controls.
 - **Determinism.** The simulation runs on a fixed 60 Hz step; identical inputs give identical
   results. Offline earnings use the analytic bottleneck rate.
 - **Saves are versioned.** `SaveManager` upgrades old saves step by step, ignores unknown
@@ -132,6 +172,8 @@ godot --headless --path . -s tests/run_tests.gd    # logic tests
 tests/run_save_flow.sh                             # real save > quit > load > offline flow
 tests/run_menu_flow.sh                             # menus, naming, pause, saving and restart, end to end
 tests/run_expansion_flow.sh                        # old save > build stainless > switch > restart > offline
+tests/run_touch_flow.sh                            # phone layout, touch input, Android pause/resume (needs xvfb)
+tests/android/run_emulator_test.sh                 # the same inside the real APK on an emulator (run by CI)
 godot --headless --path . -s tests/balance_bot.gd  # pacing report from a simulated player
 python3 tools/gen_art.py                           # regenerate sprites (needs Pillow)
 python3 tools/gen_art_stainless.py                 # regenerate the stainless plant sprites

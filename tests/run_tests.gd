@@ -21,7 +21,7 @@ func _init() -> void:
 		"test_click_boost", "test_batching", "test_save_roundtrip", "test_save_backup_and_migration",
 		"test_offline", "test_determinism", "test_big_numbers", "test_factory_name", "test_line_persistence", "test_v1_migration",
 		"test_v2_migration", "test_factory_unlock", "test_factories_independent", "test_shared_cash_and_background",
-		"test_multi_factory_save", "test_multi_factory_offline", "test_stainless_costs",
+		"test_multi_factory_save", "test_multi_factory_offline", "test_stainless_costs", "test_save_transfer",
 	]:
 		print("- ", t)
 		call(t)
@@ -603,3 +603,35 @@ func test_stainless_costs() -> void:
 	near(c.state.cash, steel.state.cylinders_made * steel.profit_per_cylinder(), 0.01, "each stainless sale credits profit once")
 	near(steel.steady_rate(), 4.0 / 64.0, 0.0001, "stainless bottleneck is TIG welding")
 	check(steel.steady_rate() < c.factory("copper").steady_rate(), "stainless starts slower than copper")
+
+
+func test_save_transfer() -> void:
+	var c := rich_company()
+	c.unlock_factory("stainless")
+	c.state.factory_name = "Taylor & Sons"
+	automate_all(c.factory("stainless"), 2)
+	SaveManager.delete_save(TEST_SAVE)
+	check(SaveManager.export_code(TEST_SAVE) == "", "no save -> no transfer code")
+	SaveManager.save_game(c.save_data(), TEST_SAVE, 1234.0)
+	var code := SaveManager.export_code(TEST_SAVE)
+	check(code.begins_with("CYLSAVE1:") and code.length() < 6000, "transfer code is compact (%d characters)" % code.length())
+	var other := "user://test_transfer_target.json"
+	SaveManager.delete_save(other)
+	check(not SaveManager.import_code("hello world", other), "random text is rejected")
+	check(not SaveManager.import_code(code.substr(0, code.length() - 40), other), "a truncated code is rejected")
+	check(not FileAccess.file_exists(other), "rejected codes write nothing")
+	# Messaging apps like to wrap long text: line breaks and spaces are tolerated.
+	var wrapped := ""
+	for i in code.length():
+		wrapped += code[i]
+		if i % 60 == 59:
+			wrapped += "\n "
+	check(SaveManager.import_code(wrapped, other), "code imports on the other device")
+	var c2 := new_session()
+	c2.load_state(SaveManager.load_game(other))
+	check(c2.state.factory_name == "Taylor & Sons", "transfer keeps the factory name")
+	near(c2.state.cash, c.state.cash, 0.001, "transfer keeps the cash")
+	check(c2.factory("stainless").state.unlocked and c2.factory("stainless").level("machine_tig") == 2, "transfer keeps the stainless plant")
+	check(c2.factory("copper").level("machine_weld") == 5, "transfer keeps copper upgrades")
+	near(c2.state.last_saved_unix, 1234.0, 0.001, "transfer keeps the save time (offline earnings carry over)")
+	SaveManager.delete_save(other)

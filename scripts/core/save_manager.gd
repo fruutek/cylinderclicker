@@ -117,3 +117,55 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				return {}
 		version = int(payload.get("version", version + 1))
 	return payload
+
+
+# ----------------------------------------------------------- save transfer
+const TRANSFER_PREFIX := "CYLSAVE1:"
+
+
+## Packs the current save into a short text code that can be copied between
+## devices (for example from Windows to a phone). Returns "" if there is no save.
+static func export_code(path: String = DEFAULT_PATH) -> String:
+	var st := load_game(path)
+	if st.is_empty():
+		return ""
+	var raw := JSON.stringify({"game": GAME_ID, "version": SAVE_VERSION, "state": st}).to_utf8_buffer()
+	return "%s%d:%s" % [TRANSFER_PREFIX, raw.size(), Marshalls.raw_to_base64(raw.compress(FileAccess.COMPRESSION_GZIP))]
+
+
+## Reads a transfer code. Returns the (migrated) state, or {} if the text is
+## not a valid Cylinder Clicker save code.
+static func decode_code(code: String) -> Dictionary:
+	code = code.strip_edges().replace("\n", "").replace("\r", "").replace(" ", "")
+	if not code.begins_with(TRANSFER_PREFIX):
+		return {}
+	var rest := code.trim_prefix(TRANSFER_PREFIX)
+	var sep := rest.find(":")
+	if sep <= 0 or not rest.substr(0, sep).is_valid_int():
+		return {}
+	var size := int(rest.substr(0, sep))
+	if size <= 0 or size > 4000000:
+		return {}
+	var packed := Marshalls.base64_to_raw(rest.substr(sep + 1))
+	if packed.is_empty():
+		return {}
+	var raw := packed.decompress(size, FileAccess.COMPRESSION_GZIP)
+	if raw.size() != size:
+		return {}
+	var parsed: Variant = JSON.parse_string(raw.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY or parsed.get("game", "") != GAME_ID:
+		return {}
+	var payload := _migrate(parsed)
+	var st: Variant = payload.get("state", {})
+	if typeof(st) != TYPE_DICTIONARY or st.is_empty():
+		return {}
+	return st
+
+
+## Replaces the save with the one in `code`. The previous save is kept as the
+## .bak file. Returns false (changing nothing) if the code is invalid.
+static func import_code(code: String, path: String = DEFAULT_PATH) -> bool:
+	var st := decode_code(code)
+	if st.is_empty():
+		return false
+	return save_game(st, path, float(st.get("last_saved_unix", 0.0)))

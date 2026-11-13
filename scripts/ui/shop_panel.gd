@@ -1,16 +1,25 @@
 class_name ShopPanel
 extends Control
-## Right-hand shop: Upgrades, Machines and Products tabs, with a hover
-## tooltip that explains each item. Entirely data-driven from GameData.
+## Right-hand shop: Upgrades, Machines and Products tabs, with a tooltip that
+## explains each item (hover with a mouse, press and hold on a touchscreen).
+## Entirely data-driven. The panel adapts to the width and height it is
+## given: on a phone it is wider, its rows are finger-sized and it scrolls.
 
-const WIDTH := 196
-const ROW_H := 27
+const WIDTH := 196               # desktop width
 const TABS: Array[String] = ["UPGRADES", "MACHINES", "PRODUCTS"]
+const HOLD_SECONDS := 0.45       # press-and-hold time that opens the tooltip on touch
+const DRAG_SLOP := 8.0           # finger travel that turns a tap into a scroll
 
 var session: FactorySim          # the factory whose shop this is
 var company: GameState
+var width := WIDTH
+var height := 330
+var touch := false
+var big := false                 # large two-line rows (touch, when there is room)
+var row_h := 27
 var _tab_buttons: Array[Button] = []
 var _pages: Array[Control] = []
+var _scrolls: Array[ScrollContainer] = []
 var _rows := {}                 # upgrade id -> row dictionary of nodes
 var _footer: Label
 var _tooltip: PanelContainer
@@ -21,12 +30,25 @@ var _hover_id := ""
 var _product_card: Label
 var _current_tab := 0
 var _refresh_timer := 0.0
+# touch press tracking (so scrolling or holding never buys by accident)
+var _held_id := ""
+var _held_btn: Control
+var _held_time := 0.0
+var _held_pos := Vector2.ZERO
+var _held_scroll := 0
+var _held_cancelled := false
+var _tip_timeout := 0.0
 
 
-func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node) -> void:
+func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node, p_width: int = WIDTH, p_height: int = 330) -> void:
 	session = p_session
 	company = p_company
-	size = Vector2(WIDTH, 330)
+	width = p_width
+	height = p_height
+	touch = UiTheme.touch
+	big = touch and width >= 276
+	row_h = 44 if big else (34 if touch else 27)
+	size = Vector2(width, height)
 
 	var bg := Panel.new()
 	var sb := UiTheme.flat(UiTheme.PARCH, UiTheme.WOOD_DARK, 0, 0)
@@ -35,31 +57,47 @@ func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node) ->
 	bg.size = size
 	add_child(bg)
 
+	var tab_h := 24 if touch else 16
+	var tab_w := int((width - 8 - 2) / 3.0)
+	var top := 3 + tab_h + 4
 	for i in TABS.size():
 		var b := Button.new()
 		b.text = TABS[i]
-		b.position = Vector2(4 + i * 63, 3)
-		b.size = Vector2(62, 16)
+		b.position = Vector2(4 + i * (tab_w + 1), 3)
 		b.focus_mode = Control.FOCUS_NONE
 		b.tooltip_text = "Shortcut: %d" % (i + 1)
 		b.pressed.connect(show_tab.bind(i, true))
 		b.clip_text = true
 		add_child(b)
-		b.size = Vector2(62, 16)
+		b.size = Vector2(tab_w, tab_h)
 		_tab_buttons.append(b)
+		# Each page lives in a scroll area: it only scrolls when its content
+		# is taller than the panel (finger-drag on touch, wheel on desktop).
+		var scroll := ScrollContainer.new()
+		scroll.position = Vector2(4, top)
+		scroll.size = Vector2(width - 6, height - top)
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		add_child(scroll)
+		_scrolls.append(scroll)
 		var page := Control.new()
-		page.position = Vector2(4, 23)
-		page.size = Vector2(WIDTH - 6, 330 - 23)
-		add_child(page)
+		page.mouse_filter = Control.MOUSE_FILTER_PASS
+		scroll.add_child(page)
 		_pages.append(page)
 
 	_build_rows(_pages[0], session.data.upgrades)
+	_pages[0].custom_minimum_size = Vector2(width - 8, session.data.upgrades.size() * (row_h + 2) + (16 if touch else 0))
+	if touch:
+		var hint := UiTheme.label("Hold a row for details.", UiTheme.INK_SOFT)
+		hint.position = Vector2(2, session.data.upgrades.size() * (row_h + 2) + 2)
+		_pages[0].add_child(hint)
 	_build_rows(_pages[1], session.data.machines)
 	_footer = UiTheme.label("", UiTheme.INK_SOFT)
-	_footer.position = Vector2(2, session.data.machines.size() * (ROW_H + 2) + 4)
-	_footer.size = Vector2(WIDTH - 12, 60)
+	_footer.position = Vector2(2, session.data.machines.size() * (row_h + 2) + 4)
+	_footer.size = Vector2(width - 12, 60)
 	_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_pages[1].add_child(_footer)
+	_pages[1].custom_minimum_size = Vector2(width - 8, session.data.machines.size() * (row_h + 2) + 66)
 	_build_products(_pages[2])
 	_build_tooltip(tooltip_parent)
 
@@ -71,7 +109,7 @@ func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node) ->
 func show_tab(index: int, with_sound: bool = false) -> void:
 	_current_tab = index
 	for i in TABS.size():
-		_pages[i].visible = i == index
+		_scrolls[i].visible = i == index
 		var active := i == index
 		var sb := UiTheme.flat(UiTheme.COPPER if active else UiTheme.PARCH_DARK, UiTheme.WOOD_DARK, 1, 2)
 		for state: String in ["normal", "hover", "pressed"]:
@@ -85,39 +123,60 @@ func show_tab(index: int, with_sound: bool = false) -> void:
 
 # ------------------------------------------------------------------- rows
 func _build_rows(page: Control, defs: Array) -> void:
+	var row_w := width - 8
 	for i in defs.size():
 		var def: Dictionary = defs[i]
 		var id: String = def["id"]
 		var btn := Button.new()
-		btn.position = Vector2(0, i * (ROW_H + 2))
-		btn.size = Vector2(WIDTH - 8, ROW_H)
+		btn.position = Vector2(0, i * (row_h + 2))
+		btn.size = Vector2(row_w, row_h)
 		btn.focus_mode = Control.FOCUS_NONE
+		btn.mouse_filter = Control.MOUSE_FILTER_PASS       # lets a drag on a row scroll the list
 		btn.pressed.connect(_on_row_pressed.bind(id))
-		btn.mouse_entered.connect(_on_row_hover.bind(id, btn))
-		btn.mouse_exited.connect(_on_row_unhover.bind(id))
+		if touch:
+			btn.button_down.connect(_on_row_down.bind(id, btn))
+			btn.button_up.connect(_on_row_up)
+		else:
+			btn.mouse_entered.connect(_on_row_hover.bind(id, btn))
+			btn.mouse_exited.connect(_on_row_unhover.bind(id))
 		page.add_child(btn)
 
 		var icon := TextureRect.new()
-		icon.position = Vector2(4, 5)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(icon)
-		var name_label := UiTheme.label("")
-		name_label.position = Vector2(24, 3)
+		var name_label := UiTheme.label("", UiTheme.INK, 16 if big else UiTheme.FONT_SIZE)
 		btn.add_child(name_label)
 		var sub := UiTheme.label("", UiTheme.INK_SOFT)
-		sub.position = Vector2(24, 14)
 		btn.add_child(sub)
-		var cost := UiTheme.label("")
-		cost.position = Vector2(WIDTH - 8 - 74, 3)
-		cost.size = Vector2(70, 10)
+		var cost := UiTheme.label("", UiTheme.INK, 16 if big else UiTheme.FONT_SIZE)
 		cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		btn.add_child(cost)
 		var lvl := UiTheme.label("", UiTheme.INK_SOFT)
-		lvl.position = Vector2(WIDTH - 8 - 54, 14)
-		lvl.size = Vector2(50, 10)
 		lvl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		btn.add_child(lvl)
-		_rows[id] = {"btn": btn, "icon": icon, "name": name_label, "sub": sub, "cost": cost, "lvl": lvl, "flash": 0.0}
+		var cost_x := 0.0
+		if big:
+			# Large rows: big name and price, small detail text.
+			icon.position = Vector2(5, 6)
+			icon.scale = Vector2(2, 2)
+			name_label.position = Vector2(42, 2)
+			sub.position = Vector2(42, 28)
+			lvl.position = Vector2(row_w - 54, 7)
+			lvl.size = Vector2(50, 10)
+			cost_x = row_w - 124
+			cost.position = Vector2(cost_x, 21)
+			cost.size = Vector2(120, 20)
+		else:
+			var y0 := int((row_h - 21) / 2.0)
+			icon.position = Vector2(4, int((row_h - 16) / 2.0))
+			name_label.position = Vector2(24, y0)
+			sub.position = Vector2(24, y0 + 11)
+			cost_x = row_w - 74
+			cost.position = Vector2(cost_x, y0)
+			cost.size = Vector2(70, 10)
+			lvl.position = Vector2(row_w - 54, y0 + 11)
+			lvl.size = Vector2(50, 10)
+		_rows[id] = {"btn": btn, "icon": icon, "name": name_label, "sub": sub, "cost": cost, "lvl": lvl, "flash": 0.0, "cost_x": cost_x}
 
 
 func _process(delta: float) -> void:
@@ -129,9 +188,55 @@ func _process(delta: float) -> void:
 		var row: Dictionary = _rows[id]
 		if row["flash"] > 0.0:
 			row["flash"] -= delta
-			(row["cost"] as Label).position.x = WIDTH - 8 - 74 + (2 if int(row["flash"] * 40.0) % 2 == 0 else -2)
+			var base_x: float = row["cost_x"]
+			(row["cost"] as Label).position.x = base_x + (2 if int(row["flash"] * 40.0) % 2 == 0 else -2)
 			if row["flash"] <= 0.0:
-				(row["cost"] as Label).position.x = WIDTH - 8 - 74
+				(row["cost"] as Label).position.x = base_x
+	if _held_id != "":
+		# A finger is resting on a row: once it has been still long enough,
+		# show the details (and the release will not count as a purchase).
+		if _press_moved():
+			_held_cancelled = true
+			_hide_tooltip()
+		elif not _held_cancelled:
+			_held_time += delta
+			if _held_time >= HOLD_SECONDS and not _tooltip.visible:
+				_hover_id = _held_id
+				_fill_tooltip(_held_id)
+				_show_tooltip_at(_held_btn)
+	if _tip_timeout > 0.0:
+		_tip_timeout -= delta
+		if _tip_timeout <= 0.0 and _held_id == "":
+			_hide_tooltip()
+
+
+# ------------------------------------------------------- touch press rules
+func _on_row_down(id: String, btn: Control) -> void:
+	_held_id = id
+	_held_btn = btn
+	_held_time = 0.0
+	_held_cancelled = false
+	_held_pos = get_global_mouse_position()
+	_held_scroll = _scrolls[_current_tab].scroll_vertical
+
+
+func _on_row_up() -> void:
+	if _tooltip != null and _tooltip.visible and _hover_id == _held_id:
+		_hide_tooltip()
+	_held_id = ""
+
+
+func _press_moved() -> bool:
+	return get_global_mouse_position().distance_to(_held_pos) > DRAG_SLOP \
+		or absi(_scrolls[_current_tab].scroll_vertical - _held_scroll) > 2
+
+
+## True if the press that just ended should NOT count as a tap on the row
+## (the list was scrolled, or the row was held to read its details).
+func _press_was_not_a_tap() -> bool:
+	if not touch:
+		return false
+	return _held_cancelled or _press_moved() or _held_time >= HOLD_SECONDS
 
 
 func refresh() -> void:
@@ -199,6 +304,8 @@ func _refresh_footer(bottleneck: int) -> void:
 
 
 func _on_row_pressed(id: String) -> void:
+	if _press_was_not_a_tap():
+		return
 	if not session.is_visible(id):
 		Sfx.play("deny")
 		return
@@ -253,7 +360,8 @@ func _show_tooltip_at(anchor: Control) -> void:
 	_tooltip.visible = true
 	_tooltip.reset_size()
 	var y := anchor.global_position.y
-	_tooltip.global_position = Vector2(global_position.x - _tooltip.size.x - 3, clampf(y, 33.0, 356.0 - _tooltip.size.y))
+	var screen_h := get_viewport_rect().size.y
+	_tooltip.global_position = Vector2(global_position.x - _tooltip.size.x - 3, clampf(y, 33.0, screen_h - 4.0 - _tooltip.size.y))
 
 
 func _hide_tooltip() -> void:
@@ -318,7 +426,7 @@ func _build_products(page: Control) -> void:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.WOOD_DARK, 1, 4))
 	card.position = Vector2(0, 0)
-	card.size = Vector2(WIDTH - 8, 68)
+	card.size = Vector2(width - 8, 68)
 	card.clip_contents = true
 	page.add_child(card)
 	_product_card = UiTheme.label("")
@@ -335,26 +443,44 @@ func _build_products(page: Control) -> void:
 			var key := "product:" + String(entry["id"])
 			_product_entries[key] = entry
 			var row := Button.new()
+			var prow_h := 22 if touch else 14
 			row.position = Vector2(0, y)
-			row.size = Vector2(WIDTH - 8, 14)
+			row.size = Vector2(width - 8, prow_h)
 			row.focus_mode = Control.FOCUS_NONE
+			row.mouse_filter = Control.MOUSE_FILTER_PASS
 			row.add_theme_stylebox_override("normal", UiTheme.flat(UiTheme.PARCH, UiTheme.PARCH_DARK, 1, 1))
 			row.add_theme_stylebox_override("hover", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.COPPER, 1, 1))
 			row.add_theme_stylebox_override("pressed", UiTheme.flat(UiTheme.PARCH, UiTheme.PARCH_DARK, 1, 1))
-			row.mouse_entered.connect(_on_row_hover.bind(key, row))
-			row.mouse_exited.connect(_on_row_unhover.bind(key))
+			if touch:
+				# Tap a product to read about it (the note hides itself again).
+				row.button_down.connect(_on_row_down.bind(key, row))
+				row.button_up.connect(_on_row_up)
+				row.pressed.connect(_on_product_tapped.bind(key, row))
+			else:
+				row.mouse_entered.connect(_on_row_hover.bind(key, row))
+				row.mouse_exited.connect(_on_row_unhover.bind(key))
 			page.add_child(row)
 			var name_label := UiTheme.label(entry["name"])
-			name_label.position = Vector2(5, 2)
+			name_label.position = Vector2(5, int((prow_h - 10) / 2.0))
 			row.add_child(name_label)
 			var status := UiTheme.label("")
-			status.position = Vector2(WIDTH - 8 - 74, 2)
+			status.position = Vector2(width - 8 - 74, int((prow_h - 10) / 2.0))
 			status.size = Vector2(70, 10)
 			status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(status)
 			_product_rows[key] = {"name": name_label, "status": status}
-			y += 15.0
+			y += prow_h + 1.0
 		y += 3.0
+	page.custom_minimum_size = Vector2(width - 8, y + 4)
+
+
+func _on_product_tapped(key: String, row: Control) -> void:
+	if _held_cancelled or _press_moved():
+		return
+	_hover_id = key
+	_fill_tooltip(key)
+	_show_tooltip_at(row)
+	_tip_timeout = 4.0
 
 
 func _refresh_products() -> void:

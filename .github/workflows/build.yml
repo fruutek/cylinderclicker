@@ -1,28 +1,34 @@
-name: Test and build Windows game
+name: Test, build and release
+
+# Every push: run the tests, build the Windows game and the Android APK, and
+# test the APK in an Android emulator. When the version in project.godot has
+# no release yet, a GitHub Release is published with both downloads.
 
 on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   GODOT_VERSION: 4.7.2-stable
 
 jobs:
-  build:
+  windows:
+    name: Tests + Windows build
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read game version
+        id: version
+        run: echo "version=$(grep -oP 'config/version="\K[^"]+' project.godot)" >> "$GITHUB_OUTPUT"
+
       - name: Install Godot and Windows export template
-        run: |
-          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          unzip -q godot.zip
-          sudo mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          curl -sSL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
-          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
-          mkdir -p "$TEMPLATE_DIR"
-          unzip -q -j templates.tpz "templates/windows_release_x86_64.exe" "templates/version.txt" -d "$TEMPLATE_DIR"
-          rm godot.zip templates.tpz
+        run: tools/ci/install_godot.sh windows_release_x86_64.exe
 
       - name: Import project
         run: godot --headless --path . --import
@@ -39,14 +45,160 @@ jobs:
       - name: Run stainless expansion flow test
         run: tests/run_expansion_flow.sh godot | tee expansion_flow.log && ! grep -q -E "FAIL|SCRIPT ERROR" expansion_flow.log && test "$(grep -c 'PASS' expansion_flow.log)" = 3
 
+      - name: Run touch (phone layout) flow test
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri >/dev/null
+          tests/run_touch_flow.sh godot | tee touch_flow.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" touch_flow.log && test "$(grep -c 'PASS' touch_flow.log)" = 2
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows
           godot --headless --path . --export-release "Windows Desktop" build/windows/CylinderClicker.exe
           test -s build/windows/CylinderClicker.exe
+          cd build/windows && zip -q -9 "../CylinderClicker-${{ steps.version.outputs.version }}-windows.zip" CylinderClicker.exe
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
           name: CylinderClicker-windows
-          path: build/windows/CylinderClicker.exe
+          path: build/CylinderClicker-${{ steps.version.outputs.version }}-windows.zip
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    outputs:
+      signing: ${{ steps.signing.outputs.signing }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read game version
+        id: version
+        run: echo "version=$(grep -oP 'config/version="\K[^"]+' project.godot)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Godot and Android export template
+        run: tools/ci/install_godot.sh android_release.apk
+
+      - name: Configure Android SDK and signing
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: tools/ci/setup_android_export.sh
+
+      - name: Export Android APK
+        run: |
+          mkdir -p build/android
+          godot --headless --path . --import
+          SUFFIX=""; [ "${{ steps.signing.outputs.signing }}" = "testkey" ] && SUFFIX="-testkey"
+          APK="build/android/CylinderClicker-${{ steps.version.outputs.version }}-android${SUFFIX}.apk"
+          godot --headless --path . --export-release "Android" "$APK"
+          test -s "$APK"
+          "$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs "$APK"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CylinderClicker-android
+          path: build/android/*.apk
+
+  android-emulator-test:
+    name: Android emulator test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and Android export template
+        run: tools/ci/install_godot.sh android_release.apk
+
+      - name: Configure Android SDK and signing
+        run: tools/ci/setup_android_export.sh
+
+      - name: Build the test APK (game + in-app test, x86_64 for the emulator)
+        run: |
+          mkdir -p build/android
+          godot --headless --path . --import
+          godot --headless --path . --export-release "Android Test" build/android/CylinderClicker-test.apk
+          test -s build/android/CylinderClicker-test.apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the game in an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: tests/android/run_emulator_test.sh build/android/CylinderClicker-test.apk android-test-output
+
+      - name: Upload emulator screenshots and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-test
+          path: android-test-output
+
+  release:
+    name: Publish release
+    needs: [windows, android, android-emulator-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether this version is already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ needs.windows.outputs.version }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.exists == 'false'
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: CylinderClicker-*
+
+      - name: Publish GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.windows.outputs.version }}"
+          NOTE=""
+          # Until the signing secrets are set, CI cannot sign with the permanent key.
+          # A pre-signed APK for this exact version, if committed under releases/android,
+          # is published instead of the throw-away-key build.
+          PRESIGNED="releases/android/CylinderClicker-${VERSION}-android.apk"
+          if [ "${{ needs.android.outputs.signing }}" = "testkey" ]; then
+            if [ -f "$PRESIGNED" ]; then
+              rm -f dist/*-testkey.apk
+              cp "$PRESIGNED" dist/
+            else
+              NOTE=$'\n\n**Note:** this APK is signed with a temporary test key. It installs normally, but cannot update a copy signed with the permanent key (see "Android signing" in the README).'
+            fi
+          fi
+          ls -la dist
+          cat > notes.md <<NOTES
+          ## Cylinder Clicker ${VERSION}
+
+          **Android (phone/tablet):** download the \`.apk\` file below on your phone and open it. Android will ask you to allow installing from your browser or Files app the first time. Landscape, offline, no permissions, no ads.
+
+          **Windows:** download the \`-windows.zip\`, unzip it and run \`CylinderClicker.exe\`.
+
+          Both versions are the same game built from the same code. To move a save between devices use **Transfer Save** on the main menu.${NOTE}
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "${{ steps.check.outputs.tag }}" dist/* --target "${{ github.sha }}" \
+            --title "Cylinder Clicker ${VERSION}" --notes-file notes.md

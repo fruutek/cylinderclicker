@@ -13,12 +13,20 @@ const HINTS := {
 	6: "FULLY AUTOMATED! Upgrade the slowest machine to lift the bottleneck. Clicking still speeds everything up. Enjoy!",
 }
 
+## Wording for touchscreens where it differs.
+const TOUCH_HINTS := {
+	1: "TAP anywhere on the factory floor. Every tap works all six stations at once.",
+	2: "SOLD! Each cylinder that reaches the van earns its profit. Keep tapping - your first upgrade costs £15.",
+	6: "FULLY AUTOMATED! Upgrade the slowest machine to lift the bottleneck. Tapping still speeds everything up. Enjoy!",
+}
+
 var session: FactorySim          # the starting factory the hints talk about
 var company: GameState
 var _label: Label
 var _timer := 0.0
 var _shown_step := -1
 var _final_time := 0.0
+var origin := Vector2(0, Hud.HEIGHT)      # top-left of the factory view on screen
 
 
 func setup(p_session: FactorySim, p_company: GameState) -> void:
@@ -80,7 +88,17 @@ func _update() -> void:
 	if step != _shown_step and visible:
 		if _shown_step != -1:
 			Sfx.play("blip")
-		_label.text = HINTS[step]
+		_label.text = TOUCH_HINTS[step] if UiTheme.touch and TOUCH_HINTS.has(step) else HINTS[step]
 		reset_size()
-		position = Vector2(8, Hud.HEIGHT + 330 - size.y - 10)
+		_place()
 	_shown_step = step
+
+
+func _place() -> void:
+	position = origin + Vector2(8, 330 - size.y - 10)
+
+
+## Called when the screen layout changes.
+func set_origin(p_origin: Vector2) -> void:
+	origin = p_origin
+	_place()

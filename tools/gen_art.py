@@ -1150,6 +1150,21 @@ def make_app_icon(items):
     out_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
     img.resize((128, 128), Image.NEAREST).save(out_path)
 
+    # Android launcher icons, from the same artwork.
+    icon_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "icons")
+    os.makedirs(icon_dir, exist_ok=True)
+    img.resize((192, 192), Image.NEAREST).save(os.path.join(icon_dir, "android_icon_192.png"))
+    # Adaptive icon: the cylinder sits inside the central safe zone, the
+    # background is the icon's teal tile (the launcher crops it to its shape).
+    fg = new(432, 432)
+    cyl = spr.resize((16 * 11, 20 * 11), Image.NEAREST)
+    fg.alpha_composite(cyl, ((432 - cyl.width) // 2, (432 - cyl.height) // 2))
+    fg.save(os.path.join(icon_dir, "android_icon_fg_432.png"))
+    bg = new(432, 432, TEAL[1])
+    rect(bg, 0, 0, 432, 96, TEAL[0])
+    rect(bg, 0, 336, 432, 96, TEAL[2])
+    bg.save(os.path.join(icon_dir, "android_icon_bg_432.png"))
+
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)

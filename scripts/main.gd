@@ -14,6 +14,10 @@ var _tip_layer: Control
 var _flash: ColorRect
 var _notified_buildable := {}
 var _check_timer := 0.0
+var _shop_size := Vector2i(ShopPanel.WIDTH, 330)
+var _insets := Vector2.ZERO      # left/right safe-area insets in screen units
+var _inset_timer := 0.0
+var _test_inset := Vector2(-1, -1)   # dev flag --safe-inset=L,R
 var _tutorial: Tutorial
 var _dialog_layer: Control
 var _pause_dialog: ModalDialog
@@ -91,6 +95,14 @@ func _ready() -> void:
 	Game.saved.connect(_toast.bind("Game saved", UiTheme.CREAM))
 	Game.save_failed.connect(_toast.bind("SAVE FAILED - could not write the save file", Color("ff8a70")))
 
+	Game.welcome_back.connect(_show_offline)
+	Game.back_pressed.connect(_on_back)
+	for arg in Game._user_args():
+		if arg.begins_with("--safe-inset="):
+			var parts := arg.trim_prefix("--safe-inset=").split(",")
+			_test_inset = Vector2(float(parts[0]), float(parts[1]) if parts.size() > 1 else 0.0)
+	get_viewport().size_changed.connect(_relayout)
+	_layout()
 	_show_factory(session)
 	Game.apply_display()
 	if not Game.pending_offline.is_empty():
@@ -120,8 +132,52 @@ func _show_factory(sim: FactorySim) -> void:
 	_factory.setup(sim, company.state)
 	_shop = ShopPanel.new()
 	_shop_holder.add_child(_shop)
-	_shop.setup(sim, company.state, _tip_layer)
+	_shop.setup(sim, company.state, _tip_layer, _shop_size.x, _shop_size.y)
 	_hud.set_factory(sim)
+
+
+# ----------------------------------------------------------------- layout
+## Left/right space to keep clear (rounded corners, camera cutout), in
+## screen units. Always zero on desktop.
+func _safe_insets() -> Vector2:
+	if _test_inset.x >= 0.0:
+		return _test_inset
+	if not OS.has_feature("mobile"):
+		return Vector2.ZERO
+	var safe := DisplayServer.get_display_safe_area()
+	var win := DisplayServer.window_get_size()
+	if win.x <= 0 or safe.size.x <= 0:
+		return Vector2.ZERO
+	var k := get_viewport_rect().size.x / float(win.x)
+	return Vector2(ceilf(maxf(safe.position.x, 0) * k), ceilf(maxf(win.x - safe.end.x, 0) * k))
+
+
+## Places the HUD, factory and shop for the current screen size. On the
+## 640x360 desktop window this gives exactly the original arrangement; on a
+## wider phone screen the factory keeps its size, the shop widens into the
+## spare room and everything stays inside the safe area.
+func _layout() -> void:
+	var vp := get_viewport_rect().size
+	_insets = _safe_insets()
+	_hud.layout(vp.x, _insets.x, _insets.y)
+	var avail_w := vp.x - _insets.x - _insets.y
+	var avail_h := vp.y - Hud.HEIGHT
+	var shop_w := ShopPanel.WIDTH
+	if UiTheme.touch:
+		shop_w = int(clampf(avail_w - FactoryView.SIZE.x, ShopPanel.WIDTH, 340.0))
+	var total := FactoryView.SIZE.x + shop_w
+	var x0 := _insets.x + floorf(maxf(avail_w - total, 0.0) / 2.0)
+	_factory_area.position = Vector2(x0, Hud.HEIGHT + floorf(maxf(avail_h - FactoryView.SIZE.y, 0.0) / 2.0))
+	_shop_holder.position = Vector2(x0 + FactoryView.SIZE.x, Hud.HEIGHT)
+	_shop_holder.size = Vector2(shop_w, avail_h)
+	_shop_size = Vector2i(shop_w, int(avail_h))
+	_tutorial.set_origin(_factory_area.position)
+	_save_toast.position = Vector2(x0 + 6, Hud.HEIGHT + 4)
+
+
+func _relayout() -> void:
+	_layout()
+	_show_factory(session)
 
 
 func switch_factory(id: String) -> bool:
@@ -147,6 +203,13 @@ func _process(delta: float) -> void:
 		_save_toast.modulate.a = clampf(_toast_time, 0.0, 1.0)
 		if _toast_time <= 0.0:
 			_save_toast.text = ""
+	# A phone can be flipped to the other landscape direction, which moves
+	# the camera cutout to the other side without changing the screen size.
+	_inset_timer -= delta
+	if _inset_timer <= 0.0:
+		_inset_timer = 1.0
+		if _safe_insets() != _insets:
+			_relayout()
 	if _flash.color.a > 0.0:
 		_flash.color.a = maxf(_flash.color.a - delta * 1.6, 0.0)
 	# Tell the player once when a new factory becomes buildable.
@@ -157,7 +220,7 @@ func _process(delta: float) -> void:
 			var id := sim.data.id
 			if company.can_unlock(id) and not _notified_buildable.has(id):
 				_notified_buildable[id] = true
-				_toast("You can now build the %s! Open FACTORIES (F)." % sim.data.name, UiTheme.GOLD)
+				_toast(("You can now build the %s! Tap FACTORIES." if UiTheme.touch else "You can now build the %s! Open FACTORIES (F).") % sim.data.name, UiTheme.GOLD)
 				_toast_time = 6.0
 				Sfx.play("buy")
 
@@ -171,7 +234,16 @@ func _toast(text: String, color: Color) -> void:
 
 # ------------------------------------------------------------------ input
 func _on_factory_input(event: InputEvent) -> void:
+	# Touchscreen: every finger that lands counts once, so two thumbs can
+	# tap alternately. The mouse event the engine also synthesises for the
+	# first finger is ignored, so a tap is never counted twice.
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			do_click(event.position)
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.device == InputEvent.DEVICE_ID_EMULATION or Input.emulate_touch_from_mouse:
+			return
 		do_click(event.position)
 
 
@@ -190,12 +262,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if not modal_open:
 				do_click(_factory.layout.station_positions[0] + Vector2(120, 60))
 		KEY_ESCAPE:
-			if modal_open:
-				var top := _dialog_layer.get_child(_dialog_layer.get_child_count() - 1) as ModalDialog
-				if top != null and top.esc_closes:
-					top.close()
-			else:
-				open_pause_menu()
+			_on_back()
 		KEY_F11:
 			company.state.settings["fullscreen"] = not bool(company.state.settings.get("fullscreen", false))
 			Game.apply_display()
@@ -207,6 +274,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if not modal_open:
 				_shop.show_tab(event.keycode - KEY_1, true)
 	get_viewport().set_input_as_handled()
+
+
+## Escape on a keyboard, or the Back button/gesture on a phone: closes the
+## dialog on top, or opens the pause menu.
+func _on_back() -> void:
+	if _dialog_layer.get_child_count() > 0:
+		var top := _dialog_layer.get_child(_dialog_layer.get_child_count() - 1) as ModalDialog
+		if top != null and top.esc_closes:
+			top.close()
+	else:
+		open_pause_menu()
 
 
 # ---------------------------------------------------------------- dialogs
@@ -261,7 +339,7 @@ func open_pause_menu() -> void:
 			name_label.text = new_name
 			_factory.queue_sign_redraw())), false)
 	d.add_menu_button("Save & Return to Main Menu", func() -> void: Game.return_to_menu(), false)
-	d.add_menu_button("Quit to Desktop", func() -> void: Game.quit_game(), false)
+	d.add_menu_button("Quit Game" if OS.has_feature("mobile") else "Quit to Desktop", func() -> void: Game.quit_game(), false)
 	d.closed.connect(func() -> void: get_tree().paused = false)
 	_open(d)
 
@@ -308,7 +386,7 @@ func _build_factory(id: String) -> void:
 	d.esc_closes = false
 	d.add_text("The %s is open for business!" % def.name, UiTheme.GREEN)
 	d.add_text(def.description)
-	d.add_text("\u2022 It has its own machines and upgrades - start by clicking, then automate each of its %d stations.\n\u2022 Everything it sells is paid into the same company account.\n\u2022 Your other factories carry on earning. Switch between them any time with FACTORIES (F)." % def.stations.size(), UiTheme.INK_SOFT)
+	d.add_text("\u2022 It has its own machines and upgrades - start by %s, then automate each of its %d stations.\n\u2022 Everything it sells is paid into the same company account.\n\u2022 Your other factories carry on earning. Switch between them any time with the FACTORIES button." % ["tapping" if UiTheme.touch else "clicking", def.stations.size()], UiTheme.INK_SOFT)
 	d.add_button("Cut the ribbon!", func() -> void: _factory.celebrate())
 	_open.call_deferred(d)
 	Game.save_now()

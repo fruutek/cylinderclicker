@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Cylinder Clicker"
 config/description="A cosy pixel-art factory idle game about making British hot water cylinders."
-config/version="0.2.0"
+config/version="0.4.0"
 run/main_scene="res://scenes/menu.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="CylinderClicker"
@@ -35,6 +35,7 @@ window/size/window_height_override=720
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
 window/stretch/scale_mode="integer"
+window/handheld/orientation=4
 
 [gui]
 
@@ -45,5 +46,6 @@ timers/tooltip_delay_sec=0.3
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 2d/snap/snap_2d_transforms_to_pixel=true
 environment/defaults/default_clear_color=Color(0.168627, 0.121569, 0.168627, 1)

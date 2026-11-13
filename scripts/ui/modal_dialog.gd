@@ -8,6 +8,7 @@ signal closed
 var esc_closes := true   # whether Escape dismisses this dialog
 
 var _panel: PanelContainer
+var _center: CenterContainer
 var _box: VBoxContainer
 var _buttons: HBoxContainer
 
@@ -24,6 +25,7 @@ func _init(title: String, width: int = 260) -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
+	_center = center
 	_panel = PanelContainer.new()
 	var sb := UiTheme.flat(UiTheme.PARCH, UiTheme.WOOD_DARK, 2, 8)
 	sb.shadow_color = Color(0, 0, 0, 0.4)
@@ -63,7 +65,7 @@ func add_button(text: String, action: Callable = Callable(), closes: bool = true
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(64, 18)
+	b.custom_minimum_size = Vector2(64, UiTheme.button_height())
 	b.pressed.connect(func() -> void:
 		Sfx.play("blip")
 		if action.is_valid():
@@ -81,7 +83,7 @@ func add_menu_button(text: String, action: Callable = Callable(), closes: bool =
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, 18)
+	b.custom_minimum_size = Vector2(0, UiTheme.button_height())
 	b.pressed.connect(func() -> void:
 		Sfx.play("blip")
 		if action.is_valid():
@@ -90,6 +92,13 @@ func add_menu_button(text: String, action: Callable = Callable(), closes: bool =
 			close())
 	_box.add_child(b)
 	return b
+
+
+## Pins the dialog to the top of the screen (so an on-screen keyboard,
+## which covers the lower half in landscape, never hides it).
+func align_top() -> void:
+	_center.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_center.offset_top = 6
 
 
 func close() -> void:

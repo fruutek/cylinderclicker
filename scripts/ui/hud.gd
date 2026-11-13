@@ -13,6 +13,10 @@ var session: FactorySim          # the factory currently on screen
 var _factories: Button
 var _factories_style: StyleBoxFlat
 var _blink := 0.0
+var _bg: Panel
+var _shine: ColorRect
+var _gear: Button
+var _groups: Array = []          # [node, base x, group] for every item, so the bar can stretch
 var _cash: Label
 var _income: Label
 var _product: Label
@@ -38,12 +42,14 @@ func setup(p_company: GameSession) -> void:
 	bg.size = size
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
+	_bg = bg
 	var shine := ColorRect.new()
 	shine.color = UiTheme.WOOD_LIGHT
 	shine.position = Vector2(0, 1)
 	shine.size = Vector2(640, 1)
 	shine.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shine)
+	_shine = shine
 
 	var coin := TextureRect.new()
 	coin.texture = preload("res://assets/sprites/coin.png")
@@ -82,6 +88,7 @@ func setup(p_company: GameSession) -> void:
 	gear.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gear.pressed.connect(func() -> void: settings_pressed.emit())
 	add_child(gear)
+	_gear = gear
 
 	# Factories button: opens the overview of every factory the company owns.
 	_factories = Button.new()
@@ -100,9 +107,44 @@ func setup(p_company: GameSession) -> void:
 	_factories.position = Vector2(524, 5)
 	_factories.size = Vector2(84, 20)
 
+	if UiTheme.touch:
+		# Finger-sized buttons.
+		_gear.position = Vector2(606, 2)
+		_gear.size = Vector2(30, 26)
+		_factories.position = Vector2(516, 2)
+		_factories.size = Vector2(86, 26)
+	# Remember where everything sits on the 640-wide desktop bar.
+	var bounds := [150.0, 264.0, 336.0, 446.0, 500.0]
+	for c in get_children():
+		if c == _bg or c == _shine:
+			continue
+		var x := (c as Control).position.x
+		var group := 0
+		for b: float in bounds:
+			if x >= b:
+				group += 1
+		_groups.append([c, x, group])
+
 	_shown_cash = company.state.cash
 	for sim in company.factories:
 		sim.shipped.connect(_on_any_shipped.bind(sim))
+
+
+## Fits the bar to the screen width. At 640 wide with no insets this is
+## exactly the desktop layout; on wider phone screens the groups spread out
+## and everything stays clear of rounded corners and the camera cutout.
+func layout(total_width: float, inset_left: float, inset_right: float) -> void:
+	size = Vector2(total_width, HEIGHT)
+	_bg.size = size
+	_shine.size = Vector2(total_width, 1)
+	var extra := maxf(total_width - inset_left - inset_right - 640.0, 0.0)
+	for item: Array in _groups:
+		var node: Control = item[0]
+		var group: int = item[2]
+		if group >= 5:
+			node.position.x = float(item[1]) + (total_width - 640.0) - inset_right
+		else:
+			node.position.x = float(item[1]) + inset_left + floorf(extra * group / 5.0)
 
 
 ## Points the factory part of the bar at a different factory.

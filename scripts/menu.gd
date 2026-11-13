@@ -5,6 +5,7 @@ extends Control
 var _continue: Button
 var _continue_note: Label
 var _dialog_layer: Control
+var _stage: Control              # the 640x360 menu artwork, centred on any screen
 
 
 func _enter_tree() -> void:
@@ -21,33 +22,37 @@ func _ready() -> void:
 	frame.color = UiTheme.WOOD
 	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(frame)
+	_stage = Control.new()
+	_stage.size = Vector2(640, 360)
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_stage)
 	var floor_art := TextureRect.new()
 	floor_art.texture = preload("res://assets/sprites/factory_bg.png")
 	floor_art.position = Vector2(98, 15)
 	floor_art.modulate = Color(0.55, 0.5, 0.52)
-	add_child(floor_art)
+	_stage.add_child(floor_art)
 	var border := Panel.new()
 	border.add_theme_stylebox_override("panel", UiTheme.flat(Color(0, 0, 0, 0), UiTheme.WOOD_DARK, 2, 0))
 	border.position = Vector2(96, 13)
 	border.size = Vector2(448, 334)
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(border)
+	_stage.add_child(border)
 
 	var title_shadow := UiTheme.label("CYLINDER CLICKER", UiTheme.OUTLINE, 32)
 	title_shadow.position = Vector2(0, 84)
 	title_shadow.size = Vector2(640, 40)
 	title_shadow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(title_shadow)
+	_stage.add_child(title_shadow)
 	var title := UiTheme.label("CYLINDER CLICKER", UiTheme.GOLD, 32)
 	title.position = Vector2(0, 81)
 	title.size = Vector2(640, 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(title)
+	_stage.add_child(title)
 	var tagline := UiTheme.label("A cosy hot water cylinder factory", UiTheme.CREAM)
 	tagline.position = Vector2(0, 122)
 	tagline.size = Vector2(640, 12)
 	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(tagline)
+	_stage.add_child(tagline)
 
 	var panel := PanelContainer.new()
 	var sb := UiTheme.flat(UiTheme.PARCH, UiTheme.WOOD_DARK, 2, 8)
@@ -55,9 +60,9 @@ func _ready() -> void:
 	sb.shadow_size = 3
 	sb.shadow_offset = Vector2(2, 3)
 	panel.add_theme_stylebox_override("panel", sb)
-	panel.position = Vector2(230, 150)
+	panel.position = Vector2(230, 142)
 	panel.custom_minimum_size = Vector2(180, 0)
-	add_child(panel)
+	_stage.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 5)
 	panel.add_child(box)
@@ -67,11 +72,12 @@ func _ready() -> void:
 	_continue_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_continue_note)
 	_menu_button(box, "Settings", func() -> void: _open(Dialogs.settings(false)))
+	_menu_button(box, "Transfer Save", func() -> void: _open(Dialogs.transfer_save(_refresh_continue)))
 	_menu_button(box, "Quit Game", func() -> void: Game.quit_game())
 
 	var version := UiTheme.label("v" + str(ProjectSettings.get_setting("application/config/version", "")), UiTheme.PARCH_DARK)
 	version.position = Vector2(6, 348)
-	add_child(version)
+	_stage.add_child(version)
 
 	_dialog_layer = Control.new()
 	_dialog_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -79,6 +85,9 @@ func _ready() -> void:
 	add_child(_dialog_layer)
 
 	_refresh_continue()
+	get_viewport().size_changed.connect(_center_stage)
+	_center_stage()
+	Game.back_pressed.connect(_on_back)
 
 	if Game.autostart:   # dev flag: go straight into a factory
 		if not Game.continue_game():
@@ -90,7 +99,7 @@ func _menu_button(box: Container, text: String, action: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, 20)
+	b.custom_minimum_size = Vector2(0, UiTheme.button_height(20))
 	b.pressed.connect(func() -> void:
 		Sfx.play("blip")
 		action.call())
@@ -137,13 +146,26 @@ func _on_continue() -> void:
 	_refresh_continue()
 
 
+func _center_stage() -> void:
+	_stage.position = ((get_viewport_rect().size - _stage.size) / 2.0).floor()
+
+
+## Escape, or the Back button on a phone: closes the dialog on top; with
+## nothing open on a phone it leaves the game (the normal Android behaviour).
+func _on_back() -> void:
+	if _dialog_layer.get_child_count() > 0:
+		var top := _dialog_layer.get_child(_dialog_layer.get_child_count() - 1) as ModalDialog
+		if top != null and top.esc_closes:
+			top.close()
+	elif OS.has_feature("mobile"):
+		Game.quit_game()
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.pressed or event.echo:
 		return
 	if event.keycode == KEY_ESCAPE and _dialog_layer.get_child_count() > 0:
-		var top := _dialog_layer.get_child(_dialog_layer.get_child_count() - 1) as ModalDialog
-		if top != null and top.esc_closes:
-			top.close()
+		_on_back()
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_F11:
 		var settings: Dictionary = Game.session.state.settings

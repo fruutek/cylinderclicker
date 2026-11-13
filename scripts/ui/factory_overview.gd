@@ -70,7 +70,7 @@ func _build_card(sim: FactorySim) -> Control:
 	box.add_child(spacer)
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(0, 18)
+	button.custom_minimum_size = Vector2(0, UiTheme.button_height())
 	button.pressed.connect(_on_card_button.bind(sim.data.id))
 	box.add_child(button)
 	_cards.append({"sim": sim, "thumb": thumb, "lock": lock, "status": status, "body": body, "reqs": reqs, "button": button})
