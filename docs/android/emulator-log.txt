@@ -4,45 +4,24 @@ InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regula
 Godot native layer initialization completed: true
 Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
 Godot native layer setup completed
-OnInitRenderView: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
+OnInitRenderView: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
 Render view should be transparent: false
 renderingDevice: opengl3 (ProjectSettings)
 			renderer: gl_compatibility (ProjectSettings)
-OnStart: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnResume: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnPause: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnStop: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnDestroy: GodotFragment{2177642} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-ERROR: Condition "!_start_success" is true.
-   at: cleanup (main/main.cpp:5222)
-OnGodotTerminating
-Engine already initialized
-OnInitRenderView: GodotFragment{88453f} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnStart: GodotFragment{88453f} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-OnResume: GodotFragment{88453f} (9008c945-01fc-4d74-adb1-4058d5058df6 id=0x7f07002c)
-Initializing Godot plugin registry
-InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regular, --xr-mode, off, --fullscreen, --edge_to_edge, --background_color, #000000]
-Godot native layer initialization completed: true
-Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
-Godot native layer setup completed
-OnInitRenderView: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
-Render view should be transparent: false
-renderingDevice: opengl3 (ProjectSettings)
-			renderer: gl_compatibility (ProjectSettings)
-OnStart: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
-OnResume: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
+OnStart: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+OnResume: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 OpenGL API OpenGL ES 3.1 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947)) - Compatibility - Using Device: Google (Google Inc. (Google)) - Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
 OnGodotSetupCompleted
 OnGodotMainLoopStarted
-ANDROID INFO os=Android model=sdk_gphone64_x86_64 window=(3120, 1440) screen=(3120, 1440) safe=[P: (144, 0), S: (2976, 1440)] refresh=60 max_fps=60 renderer=Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+ANDROID INFO os=Android model=sdk_gphone64_x86_64 window=(2400, 1080) screen=(2400, 1080) safe=[P: (108, 0), S: (2292, 1080)] refresh=60 max_fps=60 renderer=Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
   ok    running as a native Android app
-  ok    display is landscape ((3120, 1440))
+  ok    display is landscape ((2400, 1080))
   ok    app is fullscreen/immersive (system bars hidden)
   ok    saves go to the app's private storage (/data/data/com.fruutek.cylinderclicker.test/files)
-  viewport (780.0, 360.0)  window (3120, 1440)  safe [P: (144, 0), S: (2976, 1440)]
+  viewport (800.0, 360.0)  window (2400, 1080)  safe [P: (108, 0), S: (2292, 1080)]
   ok    opens on the main menu
-  ok    wide landscape view with no letterboxing ((780.0, 360.0))
+  ok    wide landscape view with no letterboxing ((800.0, 360.0))
   ok    touch presentation active
   ok    menu button 'New Game' on screen and finger-sized
   ok    menu button 'Continue' on screen and finger-sized
@@ -53,14 +32,15 @@ SHOT t01_menu
   ok    naming dialog opens with the text box focused
   ok    naming dialog sits in the top half, clear of the keyboard
 SHOT t02_name_dialog
-  keyboard height 0 of 1440, name box bottom at 372
+TAPBOX 1200 237
+  keyboard: feature=true editing=true height by itself=0, after a real tap=0 (screen 1080 tall), name box bottom at 279
   FAIL  Android keyboard opens for the factory name
   ok    the name box stays visible above the keyboard
 SHOT a02_name_with_keyboard
   ok    factory named
 SHOT t03_intro
   ok    whole factory visible at its original size
-  ok    shop panel on screen and widened (300 wide)
+  ok    shop panel on screen and widened (320 wide)
   ok    nothing sits in the cutout/rounded-corner margins (insets (36.0, 0.0))
   ok    factory and shop do not overlap
   ok    HUD buttons on screen inside the safe area
@@ -68,7 +48,7 @@ SHOT t03_intro
   ok    one tap = one click (no double count from the emulated mouse)
   ok    120 rapid two-finger taps all registered once each (got 120)
   ok    tap effects stay capped
-  rapid tapping: 240 frames in 45.95s (5 fps on this machine)
+  rapid tapping: 240 frames in 46.01s (5 fps on this machine)
   ok    tapping outside the factory does not manufacture
 SHOT t04_tapping
   ok    tap buys an upgrade exactly once
@@ -108,13 +88,52 @@ SHOT t12_settings
 SHOT t13_welcome_back
   ok    resume re-saves, so that time can never be paid twice
   ok    brief app switches and repeated resumes pay nothing extra
-EXPECT cash=5763904.00 offline=5457600.00
-PROBE 1192 900
+EXPECT cash=5763896.00 offline=5457600.00
+PROBE 894 675
   ok    20 real Android taps -> exactly 20 clicks (got 20)
 SHOT a15_after_real_taps
 TOUCH FLOW PHASE 1: FAIL (1)
 PHASE DONE
-OnPause: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
-OnStop: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
-OnStart: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
-OnResume: GodotFragment{af9e48d} (d777a3a9-670d-49da-a223-ca7cad3d151b id=0x7f07002c)
+OnPause: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+OnStop: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+Initializing Godot plugin registry
+InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regular, --xr-mode, off, --fullscreen, --edge_to_edge, --background_color, #000000]
+Godot native layer initialization completed: true
+Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
+Godot native layer setup completed
+OnInitRenderView: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+Render view should be transparent: false
+renderingDevice: opengl3 (ProjectSettings)
+			renderer: gl_compatibility (ProjectSettings)
+OnStart: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnResume: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+WARNING: Failed to load cached shader, recompiling.
+   at: _load_from_cache (drivers/gles3/shader_gles3.cpp:615)
+OpenGL API OpenGL ES 3.1 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947)) - Compatibility - Using Device: Google (Google Inc. (Google)) - Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+OnGodotSetupCompleted
+OnGodotMainLoopStarted
+ANDROID INFO os=Android model=sdk_gphone64_x86_64 window=(2400, 1080) screen=(2400, 1080) safe=[P: (108, 0), S: (2292, 1080)] refresh=60 max_fps=60 renderer=Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+  ok    running as a native Android app
+  ok    display is landscape ((2400, 1080))
+  ok    app is fullscreen/immersive (system bars hidden)
+  ok    saves go to the app's private storage (/data/data/com.fruutek.cylinderclicker.test/files)
+  ok    cold start after being killed: Continue available
+  ok    factory name and both factories restored
+  ok    upgrades and automation restored
+  ok    offline earnings paid once for the time away (got £5.54M, expected £5.45M)
+  ok    welcome-back summary shown
+SHOT t14_cold_start_welcome_back
+BG READY
+OnPause: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnStop: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnStart: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnResume: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+  ok    Home button: Android paused the app and the game saved
+  ok    short trip to the home screen pays no bonus (earned £2,016 in 9s)
+  ok    no offline summary for a few seconds away
+SHOT a16_resumed
+TOUCH FLOW PHASE 2: PASS
+ANDROID TEST DONE
+OnGodotTerminating
+IME state:  mInputShown=false 
