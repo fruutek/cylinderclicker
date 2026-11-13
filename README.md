@@ -174,6 +174,12 @@ tests/run_menu_flow.sh                             # menus, naming, pause, savin
 tests/run_expansion_flow.sh                        # old save > build stainless > switch > restart > offline
 tests/run_touch_flow.sh                            # phone layout, touch input, Android pause/resume (needs xvfb)
 tests/android/run_emulator_test.sh                 # the same inside the real APK on an emulator (run by CI)
+```
+
+Screenshots from the real Android emulator run are in `docs/android/` (add `[android-screenshots]`
+to a commit message to refresh them).
+
+```bash
 godot --headless --path . -s tests/balance_bot.gd  # pacing report from a simulated player
 python3 tools/gen_art.py                           # regenerate sprites (needs Pillow)
 python3 tools/gen_art_stainless.py                 # regenerate the stainless plant sprites
