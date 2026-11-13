@@ -19,6 +19,8 @@ func _run() -> void:
 		DisplayServer.screen_get_refresh_rate(), Engine.max_fps, RenderingServer.get_video_adapter_name()])
 	check(OS.get_name() == "Android", "running as a native Android app")
 	check(win.x > win.y, "display is landscape (%s)" % win)
+	var mode := DisplayServer.window_get_mode()
+	check(mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN, "app is fullscreen/immersive (system bars hidden)")
 	check(OS.get_user_data_dir().contains("com.fruutek.cylinderclicker"), "saves go to the app's private storage (%s)" % OS.get_user_data_dir())
 	if _phase == 1:
 		await _phase_play()

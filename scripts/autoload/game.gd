@@ -116,7 +116,9 @@ func save_settings() -> void:
 
 
 func apply_display() -> void:
-	if DisplayServer.get_name() == "headless":
+	# Phones are always fullscreen and immersive (set by the Android export);
+	# switching to "windowed" there would bring the system bars back over the game.
+	if DisplayServer.get_name() == "headless" or OS.has_feature("mobile"):
 		return
 	var want := bool(session.state.settings.get("fullscreen", false))
 	var mode := DisplayServer.window_get_mode()

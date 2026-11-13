@@ -85,7 +85,12 @@ static func name_factory(title: String, initial: String, confirm_text: String, o
 			ok.pressed.emit())
 	if UiTheme.touch:
 		d.align_top()      # keep clear of the on-screen keyboard
-	edit.ready.connect(edit.grab_focus)
+	# Start editing straight away: focus alone does not open the on-screen
+	# keyboard on a phone (and on desktop this lets you type immediately).
+	edit.ready.connect(func() -> void:
+		edit.grab_focus()
+		edit.edit()
+		edit.select_all())
 	return d
 
 
