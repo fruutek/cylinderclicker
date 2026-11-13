@@ -16,6 +16,8 @@ adb install -r "$APK" || exit 1
 adb shell wm size; adb shell wm density
 # Emulators have a "hardware keyboard"; ask Android to show the on-screen one anyway, as on a phone.
 adb shell settings put secure show_ime_with_hard_keyboard 1
+# Skip Android's one-time "Viewing full screen" hint, which would cover the first screenshots.
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb logcat -c
 adb logcat -v raw -s godot:V Godot:V >> "$LOG" &
 LOGCAT_PID=$!

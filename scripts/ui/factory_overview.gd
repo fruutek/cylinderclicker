@@ -96,9 +96,9 @@ func _refresh() -> void:
 		var unlocked := sim.state.unlocked
 		(card["lock"] as TextureRect).visible = not unlocked
 		(card["thumb"] as TextureRect).modulate = Color.WHITE if unlocked else Color(0.45, 0.45, 0.5)
-		for c in reqs.get_children():
-			c.queue_free()
 		if unlocked:
+			for c in reqs.get_children():
+				c.visible = false
 			var here := company.state.current_factory == sim.data.id
 			status.text = "OPEN - you are here" if here else "OPEN"
 			status.add_theme_color_override("font_color", UiTheme.GREEN)
@@ -114,15 +114,22 @@ func _refresh() -> void:
 			status.text = "LOCKED"
 			status.add_theme_color_override("font_color", UiTheme.RED)
 			body.text = sim.data.description
-			for r: Dictionary in company.unlock_requirements(sim.data.id):
-				var l := UiTheme.label(("✓ " if r["met"] else "• ") + String(r["text"]), UiTheme.GREEN if r["met"] else UiTheme.RED)
+			# The requirement lines are created once and then only updated, so the
+			# card never re-flows (and its button never moves) while it is open.
+			var lines: Array = company.unlock_requirements(sim.data.id)
+			var cost := sim.data.unlock_cost()
+			lines.append({"text": "Construction cost: %s" % NumFmt.money(cost), "met": company.state.cash >= cost})
+			while reqs.get_child_count() < lines.size():
+				var l := UiTheme.label("")
 				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				l.custom_minimum_size = Vector2(190, 0)
 				reqs.add_child(l)
-			var cost := sim.data.unlock_cost()
-			var affordable := company.state.cash >= cost
-			reqs.add_child(UiTheme.label(("✓ " if affordable else "• ") + "Construction cost: %s" % NumFmt.money(cost),
-				UiTheme.GREEN if affordable else UiTheme.RED))
+			for i in lines.size():
+				var line: Dictionary = lines[i]
+				var label := reqs.get_child(i) as Label
+				label.visible = true
+				label.text = ("\u2713 " if line["met"] else "\u2022 ") + String(line["text"])
+				label.add_theme_color_override("font_color", UiTheme.GREEN if line["met"] else UiTheme.RED)
 			button.text = "Build factory - %s" % NumFmt.money(cost)
 			button.disabled = not company.can_unlock(sim.data.id)
 
