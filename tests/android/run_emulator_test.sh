@@ -13,6 +13,9 @@ LOG="$OUT/godot.log"
 
 adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install -r "$APK" || exit 1
+# A 1080p-class phone screen keeps the software-rendered emulator responsive.
+adb shell wm size 1080x2400
+adb shell wm density 420
 adb shell wm size; adb shell wm density
 # Emulators have a "hardware keyboard"; ask Android to show the on-screen one anyway, as on a phone.
 adb shell settings put secure show_ime_with_hard_keyboard 1
@@ -37,6 +40,9 @@ follow() {
           SHOT\ *) adb exec-out screencap -p > "$OUT/${line#SHOT }.png" ;;
           PROBE\ *) set -- $line; echo "sending 20 real taps at $2,$3"
                     for i in $(seq 1 20); do adb shell input tap "$2" "$3"; done ;;
+          TAPBOX\ *) set -- $line; echo "tapping the name box at $2,$3"
+                    adb shell input tap "$2" "$3"; sleep 3
+                    echo "IME state: $(adb shell dumpsys input_method | grep -E -m4 'mInputShown|mShowRequested|mImeWindowVis' | tr -s ' \n' ' ')" | tee -a "$OUT/ime.txt" ;;
         esac
         case "$line" in *"$until"*) return 0 ;; esac
       done < <(tail -n +"$((SEEN + 1))" "$LOG")
@@ -54,8 +60,12 @@ adb exec-out screencap -p > "$OUT/a17_before_home.png"
 adb shell input keyevent KEYCODE_HOME
 sleep 4
 adb exec-out screencap -p > "$OUT/a18_home_screen.png"
-adb shell am force-stop "$PKG"
-sleep 1
+for attempt in 1 2 3 4 5; do
+  adb shell am force-stop "$PKG"
+  sleep 1
+  [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ] && break
+  echo "app still running after force-stop (attempt $attempt)"
+done
 
 adb shell am start -n "$ACT"
 follow "BG READY" 240; P2=$?

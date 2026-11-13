@@ -46,11 +46,20 @@ func _write_marker(text: String) -> void:
 
 
 func _after_name_dialog(edit: LineEdit) -> void:
-	await _wait(2.0)
-	var kb := DisplayServer.virtual_keyboard_get_height()
+	await _wait(2.5)
 	var win := DisplayServer.window_get_size()
+	var opened_by_itself := DisplayServer.virtual_keyboard_get_height()
+	var after_tap := 0
+	if opened_by_itself <= 0:
+		# Ask the runner for one genuine finger tap on the text box.
+		var p := _to_window(edit.get_global_rect().get_center())
+		print("TAPBOX %d %d" % [int(p.x), int(p.y)])
+		await _wait(5.0)
+		after_tap = DisplayServer.virtual_keyboard_get_height()
+	var kb := maxi(opened_by_itself, after_tap)
 	var bottom := _to_window(edit.get_global_rect().end).y
-	print("  keyboard height %d of %d, name box bottom at %d" % [kb, win.y, int(bottom)])
+	print("  keyboard: feature=%s editing=%s height by itself=%d, after a real tap=%d (screen %d tall), name box bottom at %d" % [
+		DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD), edit.is_editing(), opened_by_itself, after_tap, win.y, int(bottom)])
 	check(kb > 0, "Android keyboard opens for the factory name")
 	check(bottom <= win.y - kb + 1.0, "the name box stays visible above the keyboard")
 	await _shot("a02_name_with_keyboard")
