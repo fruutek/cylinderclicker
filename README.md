@@ -85,13 +85,18 @@ phone's **Back** button or gesture for the pause menu.
 
 ## Warehouse, stock control and customer relationships
 
-![The warehouse racking on the factory floor](docs/screenshot_warehouse.png)
+![The factory with a customer on the phone: one card, three buttons](docs/screenshot_phone_call.png)
 
-![A customer telephones: part delivery, only what we have, full order later, decline](docs/screenshot_calls.png)
+![Idle: the best next upgrade is one tap away](docs/screenshot_phone_factory.png)
 
-![The stock room: capacity, targets, priorities](docs/screenshot_stock.png)
+![STOCK: AUTO STOCK, product tiles and your sales rep](docs/screenshot_phone_stock.png)
 
-![The sales rep's forecast](docs/screenshot_sales_rep.png)
+![UPGRADES: the most useful first](docs/screenshot_phone_upgrades.png)
+
+**Playing it (0.7.0).** The main screen is the factory plus a side deck: how full the warehouse is, *one thing to do*
+(a customer's order card when somebody is on the phone, otherwise the best next upgrade) and four destinations -
+**FACTORY | ORDERS | STOCK | UPGRADES**. Everything else is automatic or behind **MORE DETAILS**. See `docs/ux-audit.md`
+for what was simplified and why.
 
 Since 0.6.0 a cylinder is no longer sold the moment it is made. The loop is: **manufacture > store in the
 warehouse > customers telephone > fulfil, part-fulfil or refuse > dispatch > earn > grow.**
@@ -111,29 +116,30 @@ warehouse > customers telephone > fulfil, part-fulfil or refuse > dispatch > ear
   more each but never earn more *per minute of line time* than the standard one, so the best plan is led by demand.
 - **Production planner.** Customers who are waiting come first (earliest promise first), then the product
   furthest below its **target stock**. Targets follow the sales rep's recommendation (AUTO TARGETS) or are set
-  by hand on the **STOCK** tab, with a priority star, auto-produce and wholesale switches and *sell surplus
-  now*. A person clicking can stockpile beyond the targets. Offline, the same planner runs in half-minute steps.
+  by hand: on the **STOCK** screen choose **AUTO STOCK** (the default: the game decides what to make) or **MANUAL**
+  (+/- per product). A person clicking can stockpile beyond the targets. Offline, the same planner runs in half-minute steps.
 - **Telephone orders.** Persistent customers ring for a product and a quantity ("Can you supply 18 Copper
-  Direct?"). Open **ORDERS > CALLS** and choose: *part delivery now and backorder the rest* (you are paid for
-  what ships, the rest is built with priority and shipped in later lorries against a promised date),
-  *only what we have*, *full order, delivered later*, or *decline*. Each offer shows how likely the customer is
-  to accept. Customers differ in patience, how much they mind part deliveries, and price sensitivity.
+  Direct?"). An order card appears beside the factory with at most three buttons: **SEND 5 + MAKE 5** (part delivery now; the
+  rest is queued, built with priority and shipped in later lorries against a promised date), **SEND 5 ONLY**, **DECLINE** - or a
+  single **FULFIL ORDER** when everything is in stock. Each offer hints how likely the customer is to accept, and the result
+  is shown as feedback ("Customer happy! +3 relationship", "Delivery late! Customer unhappy."). Customers differ in patience, how much they mind part deliveries, and price sensitivity.
   If nobody answers, your sales rep takes the call at a weaker price - which is also what keeps the factory
   selling while you are away.
 - **Orders are contracts.** A telephone order is an ordinary entry in the Contract Board with a product, ordered /
   reserved / shipped / outstanding quantities and its own lorries, so there is one order system, one set of
-  reservations and one dispatch (lorry and forklift). Board contracts are filled from stock too and can ship in
-  several lorries (paid per lorry; the bonus and reputation come when the last one has left).
+  reservations and one dispatch (lorry and forklift). Board contracts are filled from stock too, ship by themselves when finished
+  and can go in several lorries (paid per lorry; the bonus and reputation come when the last one has left).
 - **Customers and relationships.** Each customer has a relationship score (New, Known, Regular, Trusted,
   Partner), order history, total spend, preferences, typical order size, price sensitivity and patience.
   Trust brings bigger and more frequent orders, a better price (up to about +16%) and more patience. Loyalty
   grows slowly and its ceiling depends on how many orders you have really completed, so two tiny orders never make
   a partner. Late or cancelled orders and repeated refusals cost relationship, and a customer who is turned away
   too often stops ringing for a while. *Company reputation* (the stars) is separate and unchanged.
-- **Sales rep.** The **SALES REP** tab forecasts demand: the likely share of calls for each product you can make,
-  cylinders a minute, a recommended stock level, shortfalls, recent lost sales and stock nobody is buying. It is a
-  likelihood, not a promise, and **Sales Rep Training** makes it follow what customers really ask for.
-  New products rebalance the forecast the moment they unlock.
+- **Sales rep.** A helpful assistant on the STOCK screen: "Boss, we're running low on copper indirects" [RESTOCK RECOMMENDED],
+  "We're missing orders because the warehouse is full" [UPGRADE WAREHOUSE], "Customers are waiting for 12 cylinders"
+  [FOCUS ON BACKORDERS]. Underneath it still forecasts the likely share of calls per product, a recommended stock level,
+  shortfalls, lost sales and stock nobody is buying (MORE DETAILS shows the full report). It is a likelihood, not a promise,
+  and **Sales Rep Training** makes it follow what customers really ask for. New products rebalance it the moment they unlock.
 - **Old saves.** A v0.5.1 save is brought across automatically (save version 5): upgrades, money, unlocks and
   factories are untouched; each factory gets a warehouse big enough for its output and automatic targets; cylinders
   that had been built for an open contract become reserved stock for it, so no progress is lost and nothing is paid
