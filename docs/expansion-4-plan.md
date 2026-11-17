@@ -100,8 +100,8 @@ takes the calls at a weaker price); **blind** only accepts orders that are alrea
 | v0.5.1 (sell every cylinder) | 52.3M | 0% | 54 min |
 | **skilled** | **51.5M** | **-1.5%** | 55 min |
 | average | 33.5M | -36% | 62 min |
-| careless (rep answers) | ~13M | -75% | 66 min |
-| blind (stock only) | 3.3M | -94% | 80 min |
+| careless (rep answers) | 12.6M | -76% | 65 min |
+| blind (stock only) | 3.7M | -93% | 77 min |
 
 Skilled stock management matches the old game, careless play is slower but never stuck, and blind manufacturing is
 clearly worse. What it took to get there (each one measured with the simulation):
