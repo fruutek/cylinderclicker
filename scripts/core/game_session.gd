@@ -14,11 +14,19 @@ var catalog: ProductCatalog
 var factories: Array[FactorySim] = []
 var contract_rules: ContractRules
 var contracts: ContractBook          # trade contracts, reputation and dispatch
+var sku_catalog: SkuCatalog          # what can be made and stored
+var sales: SalesOffice               # customers, orders, shipments, the sales rep
+var stock_default := false           # new games keep a warehouse and sell to customers (false = v0.5.1 direct sales, used by the legacy tests)
 var _by_id: Dictionary = {}
 
 
-func _init(p_data: GameData) -> void:
+## `p_stock` = new games run the warehouse economy; the tests that pin the older sell-on-completion
+## rules leave it false.
+func _init(p_data: GameData, p_stock: bool = false) -> void:
 	data = p_data
+	sku_catalog = SkuCatalog.new(data.skus)
+	stock_default = p_stock and sku_catalog.enabled()
+	sales = SalesOffice.new()
 	catalog = ProductCatalog.new(data.products)
 	contract_rules = ContractRules.new(data.contracts)
 	contracts = ContractBook.new(contract_rules)
@@ -26,8 +34,9 @@ func _init(p_data: GameData) -> void:
 	contracts.completed.connect(_on_contract_completed)
 	contracts.failed.connect(_on_contract_failed)
 	for def in data.factories:
-		var sim := FactorySim.new(def, catalog)
+		var sim := FactorySim.new(def, catalog, sku_catalog)
 		sim.contracts = contracts
+		sim.sales = sales
 		factories.append(sim)
 		_by_id[def.id] = sim
 	new_game()
@@ -35,6 +44,7 @@ func _init(p_data: GameData) -> void:
 
 func new_game() -> void:
 	state = GameState.new()
+	state.stock_mode = stock_default
 	contracts.reset()
 	_bind_factories()
 
@@ -42,8 +52,10 @@ func new_game() -> void:
 func load_state(d: Dictionary) -> void:
 	state = GameState.new()
 	state.from_dict(d)
+	state.stock_mode = state.stock_mode and stock_default      # a direct-sales session (tests) never runs the warehouse economy
 	contracts.from_dict(state.contracts)
 	_bind_factories()
+	_apply_stock_migration()
 
 
 ## Gives every defined factory a state (loaded, or fresh if the save predates
@@ -64,6 +76,19 @@ func _bind_factories() -> void:
 			_mark_products_unlocked(sim.data)
 	if not _by_id.has(state.current_factory) or not factory(state.current_factory).state.unlocked:
 		state.current_factory = factories[0].data.id
+
+
+## A save from before the warehouse existed has just been loaded: every factory gets a stock room
+## sized to its output and automatic targets, so nothing stops earning. Happens once.
+func _apply_stock_migration() -> void:
+	if not state.stock_migrate:
+		return
+	state.stock_migrate = false
+	if not state.stock_mode:
+		return
+	for sim in factories:
+		if sim.state.unlocked:
+			sim.migrate_to_stock()
 
 
 func _mark_products_unlocked(def: FactoryDef) -> void:
@@ -188,6 +213,8 @@ func unlock_factory(id: String) -> bool:
 func apply_offline(elapsed_seconds: float) -> Dictionary:
 	if elapsed_seconds < FactorySim.OFFLINE_MIN_SECONDS:
 		return {}
+	if state.stock_mode:
+		return _apply_offline_stock(elapsed_seconds)
 	contracts.offline_begin()        # lorries that were loading have long since left
 	var parts: Array = []
 	var total_cash := 0.0
@@ -218,6 +245,61 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 	}
 	if not trade.is_empty():
 		summary["contracts"] = trade
+	return summary
+
+
+const OFFLINE_STEP := 30.0
+
+
+## Unattended time in the warehouse economy: every automated factory runs the same planner it uses live
+## (targets, customers waiting, shelf space), stepped in half-minute slices, so stock, orders and
+## wholesale sales stay consistent and nothing is counted twice.
+func _apply_offline_stock(elapsed_seconds: float) -> Dictionary:
+	contracts.offline_begin()
+	var caps := {}
+	var counted := 0.0
+	var before := {}
+	for sim in factories:
+		if not sim.state.unlocked:
+			continue
+		var cap := float(sim.stats.get("offline_hours", 8.0)) * 3600.0
+		caps[sim.data.id] = minf(elapsed_seconds, cap) if sim.steady_rate() > 0.0 else 0.0
+		counted = maxf(counted, float(caps[sim.data.id]))
+		before[sim.data.id] = {"made": sim.state.cylinders_made, "earned": sim.state.earned}
+	var t := 0.0
+	while t < counted - 1e-6:
+		var dt := minf(OFFLINE_STEP, counted - t)
+		for sim in factories:
+			if sim.state.unlocked and t < float(caps.get(sim.data.id, 0.0)):
+				sim.offline_produce(dt)
+				sim.offline_wholesale(dt)
+		sales.offline_step(dt)
+		t += dt
+	var trade := contracts.offline_end(counted)
+	var parts: Array = []
+	var total_cash := 0.0
+	var total_made := 0.0
+	var capped := false
+	for sim in factories:
+		if not before.has(sim.data.id) or float(caps[sim.data.id]) <= 0.0:
+			continue
+		var made := sim.state.cylinders_made - float(before[sim.data.id]["made"])
+		var cash := sim.state.earned - float(before[sim.data.id]["earned"])
+		if made <= 0.0 and cash <= 0.0:
+			continue
+		capped = capped or elapsed_seconds > float(caps[sim.data.id])
+		total_cash += cash
+		total_made += made
+		parts.append({"factory": sim.data.id, "name": sim.data.name, "away_seconds": elapsed_seconds, "counted_seconds": caps[sim.data.id],
+			"capped": elapsed_seconds > float(caps[sim.data.id]), "cylinders": made, "contracted": 0.0, "cash": cash})
+	if parts.is_empty() and trade.is_empty():
+		return {}
+	var summary := {"away_seconds": elapsed_seconds, "counted_seconds": counted, "capped": capped, "cylinders": total_made, "cash": total_cash, "factories": parts}
+	if not trade.is_empty():
+		summary["contracts"] = trade
+	var office := sales.offline_report()
+	if not office.is_empty():
+		summary["sales"] = office
 	return summary
 
 

@@ -60,7 +60,7 @@ func _ready() -> void:
 	data = GameData.new()
 	if not data.load_all():
 		push_error("Game: data files failed to load")
-	session = GameSession.new(data)
+	session = GameSession.new(data, true)
 	_load_settings()
 	# Dev tooling: "-- --root-bot=res://tests/x.gd" attaches a script that survives scene changes.
 	for arg in _user_args():

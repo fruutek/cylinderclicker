@@ -282,7 +282,7 @@ func _phase_play() -> void:
 	check(f3.status == Contract.Status.DISPATCHING and f3.dispatch_left > 1.0, "the lorry is still loading (%.1fs left)" % f3.dispatch_left)
 	check(Game.save_now(), "saved in the middle of the dispatch")
 	var saved := SaveManager.load_game(Game.save_path)
-	check(saved.has("contracts") and saved["contracts"]["active"].size() == 3 and int(JSON.parse_string(FileAccess.get_file_as_string(Game.save_path))["version"]) == 4, "the save is version 4 and holds 3 contracts")
+	check(saved.has("contracts") and saved["contracts"]["active"].size() == 3 and int(JSON.parse_string(FileAccess.get_file_as_string(Game.save_path))["version"]) == SaveManager.SAVE_VERSION, "the save is the current version and holds 3 contracts")
 	Game.save_enabled = false
 
 

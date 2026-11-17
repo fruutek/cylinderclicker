@@ -1133,7 +1133,7 @@ func test_save_roundtrip() -> void:
 	check(SaveManager.save_game(d, TEST_SAVE, 1000.0), "saved")
 	var back := SaveManager.load_game(TEST_SAVE)
 	var file_ver := int(JSON.parse_string(FileAccess.get_file_as_string(TEST_SAVE))["version"])
-	check(file_ver == 4, "the file is save version 4")
+	check(file_ver == SaveManager.SAVE_VERSION, "the file is the current save version")
 	var e := GameSession.new(_data)
 	e.load_state(back)
 	var field_diff := _diff(c.contracts.to_dict(), e.contracts.to_dict(), "")
@@ -1182,7 +1182,7 @@ func test_save_migration() -> void:
 		check(o.factory == "copper" and o.tier == "trade", "...sized for the copper works")
 	# The first save after migration is v4 and loads again.
 	check(SaveManager.save_game(c.save_data(), TEST_SAVE, 5.0), "saved after migration")
-	check(int(JSON.parse_string(FileAccess.get_file_as_string(TEST_SAVE))["version"]) == 4, "now version 4")
+	check(int(JSON.parse_string(FileAccess.get_file_as_string(TEST_SAVE))["version"]) == SaveManager.SAVE_VERSION, "now the current version")
 	var d := GameSession.new(_data)
 	d.load_state(SaveManager.load_game(TEST_SAVE))
 	check(d.contracts.offers.size() == 3 and d.contracts.unlocked, "and reloads with its board")

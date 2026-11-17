@@ -1,0 +1,38 @@
+{
+  "_comment": "Stock-keeping units: every cylinder the company can make and hold. A SKU belongs to one factory and is a variant of that factory's base product (data/products.json): the multipliers are relative to it, so 'Copper Indirect' is exactly the original Copper Cylinder. 'work_mult' scales every station's work (slower or quicker to make), 'weight' is the relative likelihood that an incoming order asks for it, 'requires' lists specialist machinery (upgrades at that factory) that must be bought before it can be made. Premium variants are worth more per cylinder but never more per minute of line time than the baseline. 'warehouse' holds the stock-room and wholesale tuning.",
+  "warehouse": {
+    "per_pallet": 6,
+    "wholesale_share": 0.8,
+    "wholesale_interval": 15.0,
+    "wholesale_cap_fraction": 0.15,
+    "target_cover_minutes": 3.0,
+    "migration_cover_minutes": 8.0,
+    "bays_max": 14
+  },
+  "skus": [
+    {"id": "CU-IND", "name": "Copper Indirect", "short": "Cu Indirect", "factory": "copper", "family": "indirect",
+     "value_mult": 1.0, "material_mult": 1.0, "mfg_mult": 1.0, "work_mult": 1.0, "space": 1.0, "weight": 50, "default_target": 6, "requires": [],
+     "desc": "The classic boiler-heated cylinder: quick and inexpensive to make, and what most customers ask for."},
+    {"id": "CU-DIR", "name": "Copper Direct", "short": "Cu Direct", "factory": "copper", "family": "direct",
+     "value_mult": 0.88, "material_mult": 0.92, "mfg_mult": 1.0, "work_mult": 0.9, "space": 1.0, "weight": 30, "default_target": 3, "requires": [],
+     "desc": "Immersion-heated and simpler, so a little quicker and cheaper to build, and a little cheaper to buy."},
+    {"id": "CU-HOR", "name": "Copper Horizontal", "short": "Cu Horizontal", "factory": "copper", "family": "horizontal",
+     "value_mult": 1.35, "material_mult": 1.2, "mfg_mult": 1.2, "work_mult": 1.5, "space": 1.0, "weight": 10, "default_target": 1,
+     "requires": [{"upgrade": "horizontal_tooling", "level": 1}],
+     "desc": "Built to lie flat in a loft. Extra handling and its own tooling make it slow, but it sells for much more."},
+    {"id": "CU-SLM", "name": "Copper Slimline", "short": "Cu Slimline", "factory": "copper", "family": "slimline",
+     "value_mult": 1.25, "material_mult": 1.1, "mfg_mult": 1.1, "work_mult": 1.4, "space": 1.0, "weight": 10, "default_target": 1,
+     "requires": [{"upgrade": "slimline_rig", "level": 1}],
+     "desc": "Narrow cylinders for tight airing cupboards. Needs the slimline forming rig."},
+    {"id": "ST-IND", "name": "Stainless Indirect", "short": "St Indirect", "factory": "stainless", "family": "indirect",
+     "value_mult": 1.0, "material_mult": 1.0, "mfg_mult": 1.0, "work_mult": 1.0, "space": 1.0, "weight": 55, "default_target": 2, "requires": [],
+     "desc": "The unvented stainless cylinder the plant was built for."},
+    {"id": "ST-DIR", "name": "Stainless Direct", "short": "St Direct", "factory": "stainless", "family": "direct",
+     "value_mult": 0.88, "material_mult": 0.92, "mfg_mult": 0.95, "work_mult": 0.9, "space": 1.0, "weight": 35, "default_target": 1, "requires": [],
+     "desc": "Immersion-heated stainless: simpler to build, a little cheaper to buy."},
+    {"id": "ST-HOR", "name": "Stainless Horizontal", "short": "St Horizontal", "factory": "stainless", "family": "horizontal",
+     "value_mult": 1.35, "material_mult": 1.2, "mfg_mult": 1.25, "work_mult": 1.55, "space": 1.0, "weight": 10, "default_target": 1,
+     "requires": [{"upgrade": "horizontal_cell", "level": 1}],
+     "desc": "A horizontal stainless vessel. Needs its own handling cell."}
+  ]
+}

@@ -7,7 +7,7 @@ extends RefCounted
 ## * Writes go to a temp file first and the previous save is kept as `.bak`,
 ##   so a crash mid-write cannot destroy progress.
 
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 const DEFAULT_PATH := "user://savegame.json"
 const GAME_ID := "cylinder_clicker"
 
@@ -123,6 +123,19 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				if not st3.has("contracts"):
 					st3["contracts"] = {}
 				payload["version"] = 4
+			4:
+				# v5 added the warehouse, SKUs, customers and telephone orders. Existing factories,
+				# upgrades, money and contracts are untouched; the game switches to stock keeping and
+				# GameSession grants a stock room sized to each factory (see _apply_stock_migration).
+				var st4: Variant = payload.get("state", {})
+				if typeof(st4) != TYPE_DICTIONARY:
+					return {}
+				if not st4.has("stock_mode"):
+					st4["stock_mode"] = true
+					st4["stock_migrate"] = true
+				if not st4.has("sales"):
+					st4["sales"] = {}
+				payload["version"] = 5
 			_:
 				return {}
 		version = int(payload.get("version", version + 1))

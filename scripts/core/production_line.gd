@@ -14,7 +14,7 @@ extends RefCounted
 ## the number of simulated/drawn objects stays small however large the
 ## factory's output becomes.
 
-signal shipped(count: float)
+signal shipped(count: float, sku: int)
 signal station_finished(index: int)
 
 const TOKEN_SPACING := 15.0
@@ -27,6 +27,8 @@ class Token:
 	var id: int = 0
 	var stage: int = 0          # number of stations completed
 	var count: float = 1.0      # cylinders represented by this token
+	var sku: int = -1           # which product it is (index among the factory's SKUs; -1 = the factory's base product)
+	var work_mult: float = 1.0  # how much longer than the base product it takes at every station
 	var station: int = -1       # station index while being processed, else -1
 	var belt: int = -1          # belt index while travelling, else -1
 	var pos: float = 0.0        # distance along the belt
@@ -65,6 +67,11 @@ var click_power := 1.0
 var click_boost := 0.0
 var batch := 1.0
 
+## Asks the factory what to make next: (manual: bool) -> {"sku", "work_mult", "count"}, or {} to leave the
+## first station idle. Unset = the original behaviour (always one more base cylinder).
+var spawn_cb: Callable = Callable()
+var _manual := false
+
 var _next_id := 1
 var _tick := 0
 
@@ -84,7 +91,7 @@ func set_params(works: Array[float], rates: Array[float], p_belt_speed: float, p
 		stations[i].work = maxf(works[i], 0.001)
 		stations[i].rate = maxf(rates[i], 0.0)
 		if stations[i].token != null:
-			stations[i].need = stations[i].work * stations[i].token.count
+			stations[i].need = stations[i].work * stations[i].token.count * stations[i].token.work_mult
 	belt_speed = p_belt_speed
 	click_power = p_click_power
 	click_boost = p_click_boost
@@ -139,13 +146,13 @@ func to_dict() -> Dictionary:
 	for s in stations:
 		var entry := {"progress": s.progress}
 		if s.token != null:
-			entry["token"] = {"stage": s.token.stage, "count": s.token.count}
+			entry["token"] = {"stage": s.token.stage, "count": s.token.count, "sku": s.token.sku, "wm": s.token.work_mult}
 		st.append(entry)
 	var bl: Array = []
 	for b in belts:
 		var toks: Array = []
 		for t in b.tokens:
-			toks.append({"stage": t.stage, "count": t.count, "pos": t.pos})
+			toks.append({"stage": t.stage, "count": t.count, "pos": t.pos, "sku": t.sku, "wm": t.work_mult})
 		bl.append(toks)
 	return {"stations": st, "belts": bl}
 
@@ -165,7 +172,7 @@ func from_dict(d: Dictionary) -> void:
 		var t := _restore_token(entry["token"], i, i)
 		t.station = i
 		stations[i].token = t
-		stations[i].need = stations[i].work * t.count
+		stations[i].need = stations[i].work * t.count * t.work_mult
 		stations[i].progress = clampf(float(entry.get("progress", 0.0)), 0.0, stations[i].need)
 	for i in belts.size():
 		if typeof(bl[i]) != TYPE_ARRAY:
@@ -187,6 +194,8 @@ func _restore_token(raw: Dictionary, min_stage: int, max_stage: int) -> Token:
 	_next_id += 1
 	t.stage = clampi(int(raw.get("stage", min_stage)), min_stage, max_stage)
 	t.count = maxf(float(raw.get("count", 1.0)), 1.0)
+	t.sku = int(raw.get("sku", -1))                       # saves from before products: the base product
+	t.work_mult = maxf(float(raw.get("wm", 1.0)), 0.05)
 	return t
 
 
@@ -207,7 +216,7 @@ func tick(dt: float) -> void:
 	var out_belt := belts[last]
 	while not out_belt.tokens.is_empty() and out_belt.tokens[0].pos >= out_belt.length - 0.01:
 		var t: Token = out_belt.tokens.pop_front()
-		shipped.emit(t.count)
+		shipped.emit(t.count, t.sku)
 	# Work back-to-front so space freed downstream is usable in the same tick.
 	for i in range(last, -1, -1):
 		_tick_station(i, dt)
@@ -219,6 +228,7 @@ func tick(dt: float) -> void:
 ## Returns the indices of the stations that were helped.
 func click() -> Array[int]:
 	var hit: Array[int] = []
+	_manual = true          # a person is working the line: the factory may stockpile beyond its targets
 	for i in stations.size():
 		var s := stations[i]
 		if s.token == null:
@@ -226,6 +236,7 @@ func click() -> Array[int]:
 		if s.token != null and s.progress < s.need:
 			_add_work(s, click_power + click_boost * s.rate)
 			hit.append(i)
+	_manual = false
 	return hit
 
 
@@ -254,6 +265,14 @@ func _try_load(i: int) -> void:
 		t.id = _next_id
 		_next_id += 1
 		t.count = batch
+		if spawn_cb.is_valid():
+			var plan: Dictionary = spawn_cb.call(_manual)
+			if plan.is_empty():
+				_next_id -= 1
+				return          # nothing is wanted: the first station waits
+			t.count = float(plan["count"])
+			t.sku = int(plan["sku"])
+			t.work_mult = float(plan["work_mult"])
 	else:
 		var b := belts[i - 1]
 		if b.tokens.is_empty() or b.tokens[0].pos < b.length - 0.01:
@@ -262,7 +281,7 @@ func _try_load(i: int) -> void:
 	t.station = i
 	t.belt = -1
 	s.token = t
-	s.need = s.work * t.count
+	s.need = s.work * t.count * t.work_mult
 	# Keep work that overshot the previous cylinder (only if we never idled).
 	s.progress = minf(s.carry, s.need * 0.9) if s.carry_tick == _tick - 1 else 0.0
 	s.carry = 0.0

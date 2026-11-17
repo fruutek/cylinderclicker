@@ -11,6 +11,14 @@ var cylinders_contracted: float = 0.0 # ...of which built for customer contracts
 var earned: float = 0.0               # lifetime profit made by this factory
 var best_rate_per_min: float = 0.0
 var line: Dictionary = {}             # work-in-progress snapshot (see ProductionLine.to_dict)
+# --- stock keeping (Expansion 4)
+var warehouse: Dictionary = {}        # saved Warehouse (stock, reserved, counters)
+var targets: Dictionary = {}          # sku id -> stock level automatic production works towards
+var priority: Array = []              # sku ids, most important first (ties in the planner)
+var auto_production := true           # replenish stock towards the targets by itself
+var auto_targets := false             # keep the targets at the sales rep's recommendation
+var wholesale_on := true              # surplus above target (and overflow) may go to the wholesaler
+var wholesale_timer := 0.0
 
 
 func level(id: String) -> int:
@@ -27,6 +35,13 @@ func to_dict() -> Dictionary:
 		"earned": earned,
 		"best_rate_per_min": best_rate_per_min,
 		"line": line.duplicate(true),
+		"warehouse": warehouse.duplicate(true),
+		"targets": targets.duplicate(),
+		"priority": priority.duplicate(),
+		"auto_production": auto_production,
+		"auto_targets": auto_targets,
+		"wholesale_on": wholesale_on,
+		"wholesale_timer": wholesale_timer,
 	}
 
 
@@ -45,3 +60,19 @@ func from_dict(d: Dictionary) -> void:
 	best_rate_per_min = float(d.get("best_rate_per_min", 0.0))
 	var saved_line: Variant = d.get("line", {})
 	line = saved_line.duplicate(true) if typeof(saved_line) == TYPE_DICTIONARY else {}
+	var wh: Variant = d.get("warehouse", {})
+	warehouse = wh.duplicate(true) if typeof(wh) == TYPE_DICTIONARY else {}
+	targets = {}
+	var tg: Variant = d.get("targets", {})
+	if typeof(tg) == TYPE_DICTIONARY:
+		for k: String in tg:
+			targets[k] = maxi(int(tg[k]), 0)
+	var pr: Variant = d.get("priority", [])
+	priority = []
+	if typeof(pr) == TYPE_ARRAY:
+		for v: Variant in pr:
+			priority.append(str(v))
+	auto_production = bool(d.get("auto_production", true))
+	auto_targets = bool(d.get("auto_targets", false))
+	wholesale_on = bool(d.get("wholesale_on", true))
+	wholesale_timer = maxf(float(d.get("wholesale_timer", 0.0)), 0.0)

@@ -19,6 +19,9 @@ var current_factory: String = ""          # the factory the player is looking at
 var tutorial_step: int = 0
 var last_saved_unix: float = 0.0
 var contracts: Dictionary = {}            # trade contracts, reputation and history (see ContractBook.to_dict)
+var sales: Dictionary = {}                # customers, calls, orders, shipments (see SalesOffice.to_dict)
+var stock_mode := true                    # cylinders go to the warehouse and are sold to customers (false = the v0.5.1 "sell on completion" rules, kept for tests)
+var stock_migrate := false                # set when an older save has just been brought across: grants are applied once
 var settings: Dictionary = {"sfx_volume": 0.8, "music_volume": 0.4, "fullscreen": false}
 
 
@@ -47,6 +50,9 @@ func to_dict() -> Dictionary:
 		"tutorial_step": tutorial_step,
 		"last_saved_unix": last_saved_unix,
 		"contracts": contracts.duplicate(true),
+		"sales": sales.duplicate(true),
+		"stock_mode": stock_mode,
+		"stock_migrate": stock_migrate,
 		"settings": settings.duplicate(),
 	}
 
@@ -72,6 +78,10 @@ func from_dict(d: Dictionary) -> void:
 	last_saved_unix = float(d.get("last_saved_unix", 0.0))
 	var saved_contracts: Variant = d.get("contracts", {})
 	contracts = saved_contracts.duplicate(true) if typeof(saved_contracts) == TYPE_DICTIONARY else {}
+	var saved_sales: Variant = d.get("sales", {})
+	sales = saved_sales.duplicate(true) if typeof(saved_sales) == TYPE_DICTIONARY else {}
+	stock_mode = bool(d.get("stock_mode", false))        # a save from before stock keeping played the old rules until migrated
+	stock_migrate = bool(d.get("stock_migrate", false))
 	var s: Variant = d.get("settings", {})
 	if typeof(s) == TYPE_DICTIONARY:
 		for k: String in s:

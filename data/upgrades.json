@@ -7,28 +7,184 @@
     "material_cost": 1.0,
     "machine_speed": 1.0,
     "belt_speed": 48.0,
-    "offline_hours": 8.0
+    "offline_hours": 8.0,
+    "warehouse_capacity": 24.0,
+    "forecast_quality": 0.3,
+    "auto_targets": 0.0
   },
   "upgrades": [
-    {"id": "hand_tools", "name": "Better Hand Tools", "icon": "hand_tools", "base_cost": 15, "cost_growth": 1.6, "max_level": 25, "unlock_at": 0,
-     "desc": "Faster production: every click does more work at each station.",
-     "effect_text": "+1 work per click",
-     "effects": [{"stat": "click_power", "op": "add", "value": 1.0}]},
-    {"id": "finish", "name": "Polished Finish", "icon": "finish", "base_cost": 60, "cost_growth": 1.9, "max_level": 0, "unlock_at": 0,
-     "desc": "Higher selling value: a mirror polish and a smart label. Customers pay more.",
-     "effect_text": "+20% sale price",
-     "effects": [{"stat": "sell_value", "op": "mul", "value": 1.2}]},
-    {"id": "conveyor", "name": "Conveyor Motors", "icon": "conveyor", "base_cost": 120, "cost_growth": 2.0, "max_level": 5, "unlock_at": 60,
-     "desc": "Beefier belt motors. Cylinders reach the next station sooner.",
-     "effect_text": "+20% belt speed",
-     "effects": [{"stat": "belt_speed", "op": "add_pct", "value": 0.2}]},
-    {"id": "whistle", "name": "Rallying Whistle", "icon": "whistle", "base_cost": 400, "cost_growth": 2.4, "max_level": 8, "unlock_at": 250,
-     "desc": "Keeps clicking worthwhile: each click also gives every machine a burst of extra output.",
-     "effect_text": "+5% of machine speed per click",
-     "effects": [{"stat": "click_boost", "op": "add", "value": 0.05}]},
-    {"id": "lean", "name": "Lean Workflow", "icon": "lean", "base_cost": 900, "cost_growth": 2.3, "max_level": 0, "unlock_at": 600,
-     "desc": "Factory-wide efficiency drive. Every machine runs faster.",
-     "effect_text": "+15% all machine speed",
-     "effects": [{"stat": "machine_speed", "op": "mul", "value": 1.15}]}
+    {
+      "id": "hand_tools",
+      "name": "Better Hand Tools",
+      "icon": "hand_tools",
+      "base_cost": 15,
+      "cost_growth": 1.6,
+      "max_level": 25,
+      "unlock_at": 0,
+      "desc": "Faster production: every click does more work at each station.",
+      "effect_text": "+1 work per click",
+      "effects": [
+        {
+          "stat": "click_power",
+          "op": "add",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "name": "Polished Finish",
+      "icon": "finish",
+      "base_cost": 60,
+      "cost_growth": 1.9,
+      "max_level": 0,
+      "unlock_at": 0,
+      "desc": "Higher selling value: a mirror polish and a smart label. Customers pay more.",
+      "effect_text": "+20% sale price",
+      "effects": [
+        {
+          "stat": "sell_value",
+          "op": "mul",
+          "value": 1.2
+        }
+      ]
+    },
+    {
+      "id": "conveyor",
+      "name": "Conveyor Motors",
+      "icon": "conveyor",
+      "base_cost": 120,
+      "cost_growth": 2.0,
+      "max_level": 5,
+      "unlock_at": 60,
+      "desc": "Beefier belt motors. Cylinders reach the next station sooner.",
+      "effect_text": "+20% belt speed",
+      "effects": [
+        {
+          "stat": "belt_speed",
+          "op": "add_pct",
+          "value": 0.2
+        }
+      ]
+    },
+    {
+      "id": "whistle",
+      "name": "Rallying Whistle",
+      "icon": "whistle",
+      "base_cost": 400,
+      "cost_growth": 2.4,
+      "max_level": 8,
+      "unlock_at": 250,
+      "desc": "Keeps clicking worthwhile: each click also gives every machine a burst of extra output.",
+      "effect_text": "+5% of machine speed per click",
+      "effects": [
+        {
+          "stat": "click_boost",
+          "op": "add",
+          "value": 0.05
+        }
+      ]
+    },
+    {
+      "id": "lean",
+      "name": "Lean Workflow",
+      "icon": "lean",
+      "base_cost": 900,
+      "cost_growth": 2.3,
+      "max_level": 0,
+      "unlock_at": 600,
+      "desc": "Factory-wide efficiency drive. Every machine runs faster.",
+      "effect_text": "+15% all machine speed",
+      "effects": [
+        {
+          "stat": "machine_speed",
+          "op": "mul",
+          "value": 1.15
+        }
+      ]
+    },
+    {
+      "id": "warehouse",
+      "name": "Bigger Warehouse",
+      "icon": "product",
+      "base_cost": 90,
+      "cost_growth": 1.8,
+      "max_level": 0,
+      "unlock_at": 0,
+      "desc": "More racking for finished cylinders: customers get what they want straight away and surplus has somewhere to wait.",
+      "effect_text": "+75% stock capacity",
+      "effects": [
+        {
+          "stat": "warehouse_capacity",
+          "op": "mul",
+          "value": 1.75
+        }
+      ],
+      "stock": true
+    },
+    {
+      "id": "sales_rep",
+      "name": "Sales Rep Training",
+      "icon": "whistle",
+      "base_cost": 800,
+      "cost_growth": 2.6,
+      "max_level": 5,
+      "unlock_at": 3000,
+      "desc": "Your sales rep spots patterns sooner: forecasts and recommended stock levels get more accurate.",
+      "effect_text": "+14% forecast accuracy",
+      "effects": [
+        {
+          "stat": "forecast_quality",
+          "op": "add",
+          "value": 0.14
+        }
+      ],
+      "stock": true
+    },
+    {
+      "id": "stock_planner",
+      "name": "Stock Planner",
+      "icon": "lean",
+      "base_cost": 3000,
+      "cost_growth": 2.0,
+      "max_level": 1,
+      "unlock_at": 12000,
+      "desc": "Planning software that keeps every factory's stock targets at the sales rep's recommendation automatically.",
+      "effect_text": "Targets set themselves",
+      "effects": [
+        {
+          "stat": "auto_targets",
+          "op": "add",
+          "value": 1.0
+        }
+      ],
+      "stock": true
+    },
+    {
+      "id": "horizontal_tooling",
+      "name": "Horizontal Tooling",
+      "icon": "weld",
+      "base_cost": 6000,
+      "cost_growth": 2.0,
+      "max_level": 1,
+      "unlock_at": 8000,
+      "desc": "Jigs and cradles that let the line build horizontal cylinders. Unlocks Copper Horizontal.",
+      "effect_text": "Unlocks Copper Horizontal",
+      "effects": [],
+      "stock": true
+    },
+    {
+      "id": "slimline_rig",
+      "name": "Slimline Forming Rig",
+      "icon": "roll",
+      "base_cost": 20000,
+      "cost_growth": 2.0,
+      "max_level": 1,
+      "unlock_at": 30000,
+      "desc": "Extra forming rolls for narrow shells. Unlocks Copper Slimline.",
+      "effect_text": "Unlocks Copper Slimline",
+      "effects": [],
+      "stock": true
+    }
   ]
 }
