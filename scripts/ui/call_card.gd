@@ -47,7 +47,7 @@ func refresh() -> bool:
 	var offer := office.simple_offer(call)
 	if offer.is_empty():
 		return false
-	_who.text = "%s  (%s)" % [str(offer["customer"]).to_upper(), str(offer["mood"]).to_lower()]
+	_who.text = str(offer["customer"]).to_upper()
 	_want.text = "Wants %d x %s" % [offer["wants"], offer["product"]]
 	var missing := int(offer["missing"])
 	_stock.text = "In stock %d     Missing %d" % [offer["in_stock"], missing]

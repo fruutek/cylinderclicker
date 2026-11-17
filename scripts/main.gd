@@ -405,7 +405,7 @@ func _show_offline(summary: Dictionary) -> void:
 	var built := float(summary["cylinders"]) > 0.0
 	d.add_text("You were away for %s.%s" % [NumFmt.duration(summary["away_seconds"]), " Your machines kept the line running." if built else ""])
 	var parts: Array = summary.get("factories", [])
-	if parts.size() > 1:
+	if parts.size() > 1 and not _simple_ui():
 		var lines := ""
 		for part: Dictionary in parts:
 			lines += "%s:  %s cylinders,  %s\n" % [part["name"], NumFmt.number(part["cylinders"]), NumFmt.money(part["cash"])]
@@ -418,11 +418,19 @@ func _show_offline(summary: Dictionary) -> void:
 		var waiting := int(office.get("calls_waiting", 0))
 		var missed := int(office.get("missed", 0))
 		if waiting > 0:
-			d.add_text("%d customer%s waiting for a call back - see ORDERS." % [waiting, "s are" if waiting != 1 else " is"], Color("a9760a"))
+			d.add_text("%d customer%s waiting for you." % [waiting, "s are" if waiting != 1 else " is"], Color("a9760a"))
 		if missed > 0:
 			d.add_text("%d call%s lapsed while you were away." % [missed, "s" if missed != 1 else ""], UiTheme.INK_SOFT)
-	if not trade.is_empty():
+	if not trade.is_empty() and _simple_ui():
+		var sent := (trade.get("paid", []) as Array).size()
+		if sent > 0:
+			d.add_text("%d order%s delivered while you were away." % [sent, "s" if sent != 1 else ""], UiTheme.GREEN)
+		for f: Dictionary in trade.get("failed", []):
+			d.add_text("%s gave up waiting." % f["customer"], UiTheme.RED)
+	elif not trade.is_empty():
 		_add_contract_summary(d, trade)
+	if int(office.get("rep_orders", 0)) > 0:
+		d.add_text("Your sales rep took %d order%s for you." % [int(office["rep_orders"]), "s" if int(office["rep_orders"]) != 1 else ""], UiTheme.INK_SOFT)
 	d.add_button("Lovely!", func() -> void: Sfx.play("sale"))
 	_open(d)
 	if company.state.tutorial_step == 0:
