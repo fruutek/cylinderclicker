@@ -32,6 +32,7 @@ func _init(p_data: GameData, p_stock: bool = false) -> void:
 	contract_rules = ContractRules.new(data.contracts)
 	contracts = ContractBook.new(contract_rules)
 	contracts.port = port
+	contracts.auto_ship_board = stock_default
 	sales = SalesOffice.new(data.customers, contract_rules)
 	sales.book = contracts
 	contracts.market = Callable(self, "_contract_market")

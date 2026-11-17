@@ -484,6 +484,36 @@ func owed_work() -> float:
 	return maxf(work, 0.0)
 
 
+## The upgrade most worth buying next, in plain terms: more shelves when they are full, then the machine that
+## limits the line (or the cheapest one still to automate), then the cheapest of the rest. "" = nothing to buy.
+func next_upgrade() -> String:
+	if stock_enabled() and data.upgrade_by_id.has("warehouse") and warehouse.usage_fraction() >= 0.85 and is_visible("warehouse") and not is_maxed("warehouse"):
+		return "warehouse"
+	var machine := ""
+	if all_automated():
+		var idx := line.bottleneck_index()
+		for m: Dictionary in data.machines:
+			if int(m["station_index"]) == idx and is_visible(str(m["id"])) and not is_maxed(str(m["id"])):
+				machine = str(m["id"])
+	else:
+		var cheapest := INF
+		for m: Dictionary in data.machines:
+			var id := str(m["id"])
+			if level(id) == 0 and is_visible(id) and cost(id) < cheapest:
+				cheapest = cost(id)
+				machine = id
+	if machine != "":
+		return machine
+	var pick := ""
+	for u: Dictionary in data.upgrades:
+		var uid := str(u["id"])
+		if u.get("kind", "") == "machine" or not is_visible(uid) or is_maxed(uid) or uid == "warehouse":
+			continue
+		if pick == "" or cost(uid) < cost(pick):
+			pick = uid
+	return pick
+
+
 func planner_wake() -> void:
 	_planner_idle_until = 0.0
 
@@ -493,6 +523,9 @@ func planner_wake() -> void:
 func planner_pick(manual: bool) -> int:
 	var best := -1
 	var best_key := INF
+	var any_backlog := owed_work() > 0.0
+	if state.focus_backlog and not any_backlog:
+		state.focus_backlog = false            # everybody has been served: back to normal
 	for i in skus.size():
 		if not sku_available(i):
 			continue
@@ -504,7 +537,7 @@ func planner_pick(manual: bool) -> int:
 		var key := INF
 		if backlog(i) - wip > 0.5:
 			key = (sales.due_rank(data.id, id) if sales != null else 0.0)
-		elif state.auto_production or manual:
+		elif (state.auto_production or manual) and not state.focus_backlog:
 			var target := effective_target(i)
 			var have := float(warehouse.available(id)) + wip
 			if float(target) - have > 0.5:

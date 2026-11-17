@@ -357,6 +357,9 @@ func _phase_play() -> void:
 ## production share, wait for the order to fill, dispatch it and see it paid.
 func _touch_contracts(c: GameSession, main: Node) -> void:
 	var copper := c.factory("copper")
+	if not c.contracts.unlocked:
+		c.contracts.tick(1.0)              # the unlock check runs twice a second: do not depend on the runner's frame rate
+		await _wait(0.5)
 	check(c.contracts.unlocked, "customers are calling by now")
 	c.contracts.offers.clear()
 	for i in 3:

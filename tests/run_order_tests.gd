@@ -18,7 +18,7 @@ func _init() -> void:
 		"test_customers_and_calls", "test_options", "test_full_order", "test_part_delivery_and_backorder", "test_available_only",
 		"test_delayed_full_order", "test_decline", "test_relationship_rules", "test_lateness_and_cancel", "test_board_contract_on_stock",
 		"test_reservations_conserved", "test_save_roundtrip", "test_migration_with_contracts", "test_offline_orders", "test_sales_rep",
-		"test_planner_serves_backorders",
+		"test_planner_serves_backorders", "test_simple_layer",
 	]:
 		print("- ", t)
 		call(t)
@@ -412,6 +412,7 @@ func test_lateness_and_cancel() -> void:
 
 func test_board_contract_on_stock() -> void:
 	var c := company()
+	c.contracts.auto_ship_board = false      # this test sends the lorry by hand
 	var sim := c.factory("copper")
 	sim.state.upgrade_levels["warehouse"] = 6         # room for a whole order on the shelves
 	sim.refresh()
@@ -563,6 +564,7 @@ func test_migration_with_contracts() -> void:
 	f.store_string(JSON.stringify({"game": "cylinder_clicker", "version": 4, "state": data}))
 	f.close()
 	var c := GameSession.new(_data, true)
+	c.contracts.auto_ship_board = false      # the finished contract is sent by hand below
 	c.load_state(SaveManager.load_game(TEST_SAVE))
 	var sim := c.factory("copper")
 	check(c.state.stock_mode and c.contracts.active.size() == 3, "all three contracts survive the move to stock keeping")
@@ -747,3 +749,132 @@ func _diff(a: Variant, b: Variant, path: String) -> Array:
 	elif a != b:
 		out.append("%s: %s != %s" % [path, a, b])
 	return out
+
+
+## The phone game's plain-language layer: three-button order cards, the rep's advice, focus on backorders,
+## the next upgrade to buy, finished contracts shipping themselves, and relationship feedback.
+func test_simple_layer() -> void:
+	var c := company()
+	var sim := c.factory("copper")
+	sim.state.wholesale_on = false
+	# --- order cards: one button when everything is in stock, three when some is missing
+	stock(c, "CU-IND", 20)
+	var full := c.sales.simple_offer(call_for(c, "CU-IND", 10))
+	var ids: Array = []
+	for b: Dictionary in full["buttons"]:
+		ids.append(b["id"])
+	check(ids == ["full", "decline"] and full["buttons"][0]["label"] == "FULFIL ORDER" and full["missing"] == 0, "all in stock: FULFIL ORDER (and DECLINE)")
+	var part := c.sales.simple_offer(call_for(c, "CU-IND", 30, 1))
+	ids.clear()
+	for b: Dictionary in part["buttons"]:
+		ids.append(b["id"])
+	check(ids == ["partial", "available", "decline"] and part["in_stock"] == 20 and part["missing"] == 10, "some missing: SEND + MAKE, SEND ONLY, DECLINE (%s)" % str(ids))
+	check(part["buttons"][0]["label"] == "SEND 20 + MAKE 10" and part["buttons"][1]["label"] == "SEND 20 ONLY", "the labels say what happens: " + str(part["buttons"][0]["label"]))
+	var d := company()
+	var none := d.sales.simple_offer(call_for(d, "CU-IND", 12))
+	check(none["buttons"][0]["id"] == "delayed" and none["buttons"][-1]["id"] == "decline" and none["in_stock"] == 0, "nothing in stock: MAKE IT or DECLINE")
+	# --- the production queue is handled for you: SEND 20 + MAKE 10 ships now and builds the rest, no further taps
+	var keep := c.sales.find_call(str(part["call_id"]))
+	c.sales.calls.clear()
+	c.sales.calls.append(keep)                      # only this call is ringing
+	var cust: Dictionary = c.sales.find_customer(str(keep["customer"]))
+	cust["rel"] = 70.0
+	sim.state.targets = {"CU-IND": 0, "CU-DIR": 0, "CU-HOR": 0, "CU-SLM": 0}
+	sim.state.auto_targets = false
+	var r: Dictionary = c.sales.answer(str(part["call_id"]), "partial")
+	check(r["accepted"], "SEND 20 + MAKE 10 accepted by a trusted customer")
+	var cash0 := c.state.cash
+	run(c, 150.0)
+	check(c.contracts.active.is_empty() and sim.warehouse.shipped.get("CU-IND", 0) == 30, "all 30 delivered with no further input (the missing 10 were queued and built)")
+	check(c.state.cash > cash0, "and it paid as the lorries left")
+	# --- relationship feedback
+	var heard := {"n": 0, "delta": 0.0, "reason": ""}
+	c.sales.relationship_moved.connect(func(_id: String, _name: String, delta: float, reason: String) -> void:
+		heard["n"] += 1
+		heard["delta"] = delta
+		heard["reason"] = reason)
+	var e := company()
+	stock(e, "CU-IND", 8)
+	e.sales.relationship_moved.connect(func(_id: String, _name: String, delta: float, reason: String) -> void:
+		heard["n"] += 1
+		heard["delta"] = delta
+		heard["reason"] = reason)
+	var ec := call_for(e, "CU-IND", 6)
+	e.sales.find_customer(str(ec["customer"]))["completed"] = 10
+	e.sales.find_customer(str(ec["customer"]))["rel"] = 40.0
+	e.sales.answer(str(ec["id"]), "full")
+	run(e, 12.0)
+	check(heard["n"] >= 1 and heard["reason"] == "happy" and heard["delta"] > 0.0, "a delivered order tells the player the customer is happy (+%.1f)" % heard["delta"])
+	# --- sales rep advice
+	var f := company()
+	var fs := f.factory("copper")
+	check(f.sales.advice(fs).size() >= 1, "the rep always has something to say")
+	fs.state.auto_targets = false
+	fs.state.targets = {"CU-IND": 0, "CU-DIR": 0, "CU-HOR": 0, "CU-SLM": 0}
+	for sku in ["CU-IND", "CU-DIR"]:
+		fs.warehouse.stock[sku] = 0
+	var adv: Array = f.sales.advice(fs)
+	var low_found := false
+	for a: Dictionary in adv:
+		if a["action"] == "restock":
+			low_found = true
+			check("running low" in str(a["text"]), "plain words: " + str(a["text"]))
+	check(low_found, "empty shelves: the rep says stock is running low")
+	var calls := call_for(f, "CU-IND", 10)
+	f.sales.answer(str(calls["id"]), "delayed")
+	adv = f.sales.advice(fs)
+	var focus_found := false
+	for a: Dictionary in adv:
+		if a["action"] == "focus_backlog":
+			focus_found = true
+	check(focus_found or fs.owed_work() <= 0.0, "customers waiting: the rep offers FOCUS ON BACKORDERS")
+	if focus_found:
+		var item := {"action": "focus_backlog", "sku": ""}
+		f.sales.do_advice(fs, item)
+		check(fs.state.focus_backlog, "...and one tap does it")
+		fs.state.targets = {"CU-IND": 50, "CU-DIR": 50, "CU-HOR": 0, "CU-SLM": 0}
+		fs.planner_wake()
+		var pick := fs.planner_pick(false)
+		check(pick == 0, "focus builds only for the waiting customer, not the stock targets (picked %d)" % pick)
+		run(f, 80.0)
+		check(not fs.state.focus_backlog, "focus switches itself off once everyone has been served")
+	# --- warehouse advice
+	var g := company()
+	var gs := g.factory("copper")
+	gs.state.wholesale_on = false
+	gs.warehouse.receive("CU-IND", float(gs.warehouse.capacity))
+	g.sales.lost["CU-IND"] = 12.0
+	var gadv: Array = g.sales.advice(gs)
+	var wh := false
+	for a: Dictionary in gadv:
+		if a["action"] == "upgrade_warehouse":
+			wh = true
+			check(a["label"] == "UPGRADE WAREHOUSE" and "warehouse is full" in str(a["text"]), "plain words: " + str(a["text"]))
+	check(wh, "full shelves and lost orders: the rep offers UPGRADE WAREHOUSE")
+	g.state.cash = 1.0e6
+	var cap0 := gs.warehouse.capacity
+	g.sales.do_advice(gs, {"action": "upgrade_warehouse"})
+	check(gs.warehouse.capacity > cap0, "one tap upgrades it (%d -> %d)" % [cap0, gs.warehouse.capacity])
+	# --- next upgrade
+	var h := company(false)
+	var hs := h.factory("copper")
+	var nu := hs.next_upgrade()
+	check(nu.begins_with("machine_"), "a line that is not automated yet is told to buy a machine (%s)" % nu)
+	for m: Dictionary in hs.data.machines:
+		hs.state.upgrade_levels[m["id"]] = 3
+	hs.refresh()
+	var nb := hs.next_upgrade()
+	check(nb.begins_with("machine_") and hs.level(nb) >= 3, "an automated line is told to lift its slowest machine (%s)" % nb)
+	hs.warehouse.receive("CU-IND", float(hs.warehouse.capacity))
+	check(hs.next_upgrade() == "warehouse", "full shelves put the warehouse first")
+	# --- finished board contracts ship themselves in the phone game
+	var k := company()
+	k.contracts.refresh_board()
+	var offer: Contract = k.contracts.offers[0]
+	k.factory("copper").state.upgrade_levels["warehouse"] = 6
+	k.factory("copper").refresh()
+	stock(k, offer.sku, offer.quantity)
+	k.contracts.accept(offer.id)
+	k.state.cash = 0.0
+	run(k, 15.0)
+	check(k.contracts.find(offer.id) == null and k.state.cash > 0.0, "a finished board contract is sent and paid without a dispatch screen")

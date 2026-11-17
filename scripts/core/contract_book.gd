@@ -34,6 +34,7 @@ const EPS := 1.0e-6                     # shipments are floating point: "complet
 
 var rules: ContractRules
 var market: Callable = Callable()      # () -> {"earned": float, "factories": [{id, product_name, profit, rate, skus}]}
+var auto_ship_board := false           # a finished board contract goes out by itself (the phone game: no dispatch screen)
 var port: StockPort = null             # the warehouses (null / not stocking = the v0.5.1 "built-for-contract" counters)
 
 var reputation := 0
@@ -937,8 +938,9 @@ func auto_dispatch(instant: bool) -> void:
 func _wants_lorry(c: Contract) -> bool:
 	var blocked := port.free_space(c.factory) < 1.0          # reserved stock has filled the shelves and stopped the line
 	if not c.is_call():
-		# A board contract waits for you to send it (a complete load earns its bonus) unless the line is blocked.
-		return blocked
+		# A board contract waits for you to send it (a complete load earns its bonus) unless the line is blocked
+		# - or the game sends finished orders by itself.
+		return blocked or (auto_ship_board and c.remaining() <= EPS and c.held >= float(c.quantity) - c.shipped - EPS)
 	if blocked:
 		return true
 	var owed := float(c.quantity) - c.shipped

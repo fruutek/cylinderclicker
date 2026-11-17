@@ -8,6 +8,7 @@ extends RefCounted
 signal call_arrived(call: Dictionary)
 signal call_closed(call: Dictionary, outcome: String)       # "accepted", "rejected", "declined", "expired"
 signal customer_changed(customer_id: String)
+signal relationship_moved(customer_id: String, customer_name: String, delta: float, reason: String)   # for the "customer happy!" feedback
 
 const STATE_VERSION := 1
 const OPTIONS := ["partial", "available", "decline", "delayed", "full"]
@@ -220,7 +221,7 @@ func relationship_cap(cust: Dictionary) -> float:
 	return minf(100.0, num("relationship_cap_base", 15.0) + num("relationship_cap_per_order", 6.0) * float(cust["completed"]))
 
 
-func _change_rel(cust: Dictionary, delta: float) -> void:
+func _change_rel(cust: Dictionary, delta: float, reason: String = "") -> void:
 	var before := float(cust["rel"])
 	if delta > 0.0:
 		cust["rel"] = minf(before + delta, maxf(relationship_cap(cust), before))
@@ -228,6 +229,8 @@ func _change_rel(cust: Dictionary, delta: float) -> void:
 		cust["rel"] = maxf(before + delta, 0.0)
 	if absf(float(cust["rel"]) - before) > 1e-6:
 		customer_changed.emit(str(cust["id"]))
+		if reason != "":
+			relationship_moved.emit(str(cust["id"]), str(cust["name"]), float(cust["rel"]) - before, reason)
 
 
 ## Price a customer pays relative to the list profit: trust earns a premium, hard bargainers give less.
@@ -394,7 +397,7 @@ func _expire(call: Dictionary) -> void:
 	stats["missed"] = int(stats["missed"]) + 1
 	if not cust.is_empty():
 		if not _was_offline or _missed_offline < 3:
-			_change_rel(cust, -num("loss_missed_call", 1.0))
+			_change_rel(cust, -num("loss_missed_call", 1.0), "missed")
 		if _was_offline:
 			_missed_offline += 1
 	call_closed.emit(call, "expired")
@@ -538,7 +541,7 @@ func answer(call_id: String, option_id: String) -> Dictionary:
 		calls.erase(call)
 		_note_lost(str(call["sku"]), float(call["qty"]))
 		stats["rejected"] = int(stats["rejected"]) + 1
-		_change_rel(cust, -num("loss_rejected_offer", 1.0))
+		_change_rel(cust, -num("loss_rejected_offer", 1.0), "rejected")
 		call_closed.emit(call, "rejected")
 		return {"ok": true, "accepted": false, "text": "%s: \"No, that won't do. I'll find someone else this time.\"" % cust["name"]}
 	var contract := _make_order(call, cust, sim, opt)
@@ -586,7 +589,7 @@ func _decline(call: Dictionary, cust: Dictionary) -> void:
 	_note_lost(str(call["sku"]), float(call["qty"]))
 	stats["declined"] = int(stats["declined"]) + 1
 	var repeat := int(cust["refusals"]) >= 1
-	_change_rel(cust, -(num("loss_repeat_decline", 4.0) if repeat else num("loss_declined", 2.0)))
+	_change_rel(cust, -(num("loss_repeat_decline", 4.0) if repeat else num("loss_declined", 2.0)), "declined")
 	cust["refusals"] = int(cust["refusals"]) + 1
 	if int(cust["refusals"]) >= 3 or float(cust["rel"]) < num("dormant_below", 6.0):
 		cust["dormant_until"] = clock + num("dormant_return_seconds", 900.0)       # tired of being turned down: stops ringing for a while
@@ -604,14 +607,14 @@ func order_ended(c: Contract, outcome: String) -> void:
 	match outcome:
 		"complete":
 			cust["completed"] = int(cust["completed"]) + 1
-			_change_rel(cust, num("gain_on_time", 3.0) * size_factor * (0.5 + 0.5 * asked_share))
+			_change_rel(cust, num("gain_on_time", 3.0) * size_factor * (0.5 + 0.5 * asked_share), "happy")
 		"late_complete":
 			cust["completed"] = int(cust["completed"]) + 1
-			_change_rel(cust, num("gain_late", 0.8) * size_factor)
+			_change_rel(cust, num("gain_late", 0.8) * size_factor, "late")
 		_:
 			cust["failed"] = int(cust["failed"]) + 1
 			var share := 0.5 if c.shipped > 0.0 else 1.0
-			_change_rel(cust, -num("loss_cancelled", 7.0) * share)
+			_change_rel(cust, -num("loss_cancelled", 7.0) * share, "gave_up")
 			_note_lost(c.sku, c.outstanding())
 	cust["spent"] = float(cust["spent"]) + c.paid_total
 	var hist: Array = cust["history"]
@@ -735,3 +738,118 @@ func offline_report() -> Dictionary:
 	_missed_offline = 0
 	_calls_offline = 0
 	return report if (calls.size() > 0 or int(report["missed"]) > 0 or int(report["rep_orders"]) > 0) else {}
+
+
+# ================================================================ the phone game's plain-language layer
+## One order card in plain words: who, what, what is in stock, what is missing, and at most three
+## buttons (each is one of the options above): FULFIL ORDER, or SEND n + MAKE m / SEND n ONLY / DECLINE,
+## or (nothing in stock) MAKE IT / DECLINE.
+func simple_offer(call: Dictionary) -> Dictionary:
+	var sim: FactorySim = sims.get(str(call["factory"]))
+	var cust := find_customer(str(call["customer"]))
+	if sim == null or cust.is_empty():
+		return {}
+	var i := sim.sku_index(str(call["sku"]))
+	var qty := int(call["qty"])
+	var have := mini(sim.warehouse.available(str(call["sku"])), qty)
+	var opts := {}
+	for o: Dictionary in options_for(call):
+		opts[o["id"]] = o
+	var buttons: Array = []
+	if opts.has("full"):
+		buttons.append({"id": "full", "label": "FULFIL ORDER", "primary": true, "hint": ""})
+	elif opts.has("partial"):
+		buttons.append({"id": "partial", "label": "SEND %d + MAKE %d" % [have, qty - have], "primary": true, "hint": str(opts["partial"]["verdict"])})
+		buttons.append({"id": "available", "label": "SEND %d ONLY" % have, "primary": false, "hint": str(opts["available"]["verdict"]) if opts.has("available") else ""})
+	elif opts.has("delayed"):
+		buttons.append({"id": "delayed", "label": "MAKE %d  (%s)" % [qty, short_time(float(opts["delayed"]["eta"]))], "primary": true, "hint": str(opts["delayed"]["verdict"])})
+	buttons.append({"id": "decline", "label": "DECLINE", "primary": false, "hint": ""})
+	return {
+		"call_id": str(call["id"]), "customer": str(cust["name"]), "wants": qty, "product": str(sim.skus[i]["name"]), "short": str(sim.skus[i].get("short", sim.skus[i]["name"])),
+		"sku": str(call["sku"]), "in_stock": have, "missing": qty - have, "buttons": buttons, "expires_in": float(call["expires_in"]),
+		"mood": relationship_tier(float(cust["rel"])), "pay": sim.sku_profit(i) * float(call["factor"]) * float(qty),
+	}
+
+
+## A rough duration for estimates ("45s", "12m", "2h 10m").
+static func short_time(seconds: float) -> String:
+	if seconds < 90.0:
+		return "%ds" % int(seconds)
+	if seconds < 3600.0:
+		return "%dm" % int(roundf(seconds / 60.0))
+	return "%dh %dm" % [int(seconds / 3600.0), int(fmod(seconds, 3600.0) / 60.0)]
+
+
+## What the sales rep would say right now: up to two short pieces of advice, each with a one-tap action.
+## Each is {text, action, label, sku} - an empty action is just chat.
+func advice(sim: FactorySim) -> Array:
+	var out: Array = []
+	if sim == null or not sim.stock_enabled():
+		return out
+	var rows: Array = forecast(sim)
+	var w := sim.warehouse
+	var lost_total := 0.0
+	for r: Dictionary in rows:
+		lost_total += float(r["lost"])
+	if w.usage_fraction() >= 0.9 and (lost_total > 0.0 or int(stats["missed"]) > 0 or int(stats["rejected"]) > 0):
+		out.append({"text": "We're missing orders because the warehouse is full.", "action": "upgrade_warehouse", "label": "UPGRADE WAREHOUSE", "sku": ""})
+	var owed := 0.0
+	for r: Dictionary in rows:
+		owed += float(r["owed"])
+	if sim.state.focus_backlog:
+		out.append({"text": "Putting waiting customers first until they're served.", "action": "unfocus", "label": "BACK TO NORMAL", "sku": ""})
+	elif owed > 0.5:
+		out.append({"text": "Customers are waiting for %d cylinders, boss." % int(ceilf(owed)), "action": "focus_backlog", "label": "FOCUS ON BACKORDERS", "sku": ""})
+	var low: Dictionary = {}
+	var low_gap := 0.0
+	var dead: Dictionary = {}
+	for r: Dictionary in rows:
+		var gap := float(int(r["recommended"]) - int(r["stock"])) / maxf(float(r["recommended"]), 1.0)
+		if float(r["share"]) >= 0.2 and gap >= 0.5 and gap > low_gap:
+			low = r
+			low_gap = gap
+		if bool(r["dead"]) and dead.is_empty():
+			dead = r
+	if not low.is_empty() and out.size() < 2:
+		out.append({"text": "Boss, we're running low on %s." % str(low["short"]).to_lower() + "s", "action": "restock", "label": "RESTOCK RECOMMENDED", "sku": str(low["sku"])})
+	if not dead.is_empty() and out.size() < 2:
+		out.append({"text": "%s aren't selling. I'd reduce production." % str(dead["short"]), "action": "sell_surplus", "label": "SELL THE SURPLUS", "sku": str(dead["sku"])})
+	if out.is_empty():
+		out.append({"text": "All quiet, boss. The shelves look healthy.", "action": "", "label": "", "sku": ""})
+	return out.slice(0, 2)
+
+
+## Does what a piece of advice offers. Returns a short line for the toast ("" = nothing happened).
+func do_advice(sim: FactorySim, item: Dictionary) -> String:
+	if sim == null:
+		return ""
+	var sku := str(item.get("sku", ""))
+	match str(item.get("action", "")):
+		"upgrade_warehouse":
+			if sim.buy("warehouse"):
+				return "Warehouse extended: room for %d cylinders." % sim.warehouse.capacity
+			return "Not enough money for more shelving yet."
+		"focus_backlog":
+			sim.state.focus_backlog = true
+			sim.planner_wake()
+			return "Making what waiting customers need first."
+		"unfocus":
+			sim.state.focus_backlog = false
+			sim.planner_wake()
+			return "Back to keeping the shelves stocked."
+		"restock":
+			var i := sim.sku_index(sku)
+			if i >= 0:
+				if not sim.auto_targets_active():
+					sim.set_target(sku, maxi(recommended(sim.data.id, sku), sim.effective_target(i)))
+				sim.prioritise(sku)
+				return "Making more %s first." % str(sim.skus[i]["short"])
+		"sell_surplus":
+			var j := sim.sku_index(sku)
+			if j >= 0:
+				var surplus := sim.warehouse.available(sku) - sim.effective_target(j)
+				if surplus > 0:
+					var net := sim._sell_units(j, surplus, "wholesale")
+					return "Sold %d surplus for %s." % [surplus, NumFmt.money(net)]
+				return "Nothing extra to sell."
+	return ""
