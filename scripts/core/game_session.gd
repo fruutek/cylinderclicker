@@ -15,7 +15,8 @@ var factories: Array[FactorySim] = []
 var contract_rules: ContractRules
 var contracts: ContractBook          # trade contracts, reputation and dispatch
 var sku_catalog: SkuCatalog          # what can be made and stored
-var sales: SalesOffice               # customers, orders, shipments, the sales rep
+var sales: SalesOffice               # customers, telephone orders, the sales rep
+var port: StockPort                  # lets the contract book reserve and ship warehouse stock
 var stock_default := false           # new games keep a warehouse and sell to customers (false = v0.5.1 direct sales, used by the legacy tests)
 var _by_id: Dictionary = {}
 
@@ -26,19 +27,26 @@ func _init(p_data: GameData, p_stock: bool = false) -> void:
 	data = p_data
 	sku_catalog = SkuCatalog.new(data.skus)
 	stock_default = p_stock and sku_catalog.enabled()
-	sales = SalesOffice.new()
+	port = StockPort.new()
 	catalog = ProductCatalog.new(data.products)
 	contract_rules = ContractRules.new(data.contracts)
 	contracts = ContractBook.new(contract_rules)
+	contracts.port = port
+	sales = SalesOffice.new(data.customers, contract_rules)
+	sales.book = contracts
 	contracts.market = Callable(self, "_contract_market")
 	contracts.completed.connect(_on_contract_completed)
 	contracts.failed.connect(_on_contract_failed)
+	contracts.shipment_left.connect(_on_shipment_left)
+	contracts.order_ended.connect(sales.order_ended)
 	for def in data.factories:
 		var sim := FactorySim.new(def, catalog, sku_catalog)
 		sim.contracts = contracts
 		sim.sales = sales
 		factories.append(sim)
 		_by_id[def.id] = sim
+		port.sims[def.id] = sim
+		sales.sims[def.id] = sim
 	new_game()
 
 
@@ -46,6 +54,7 @@ func new_game() -> void:
 	state = GameState.new()
 	state.stock_mode = stock_default
 	contracts.reset()
+	sales.reset()
 	_bind_factories()
 
 
@@ -54,6 +63,7 @@ func load_state(d: Dictionary) -> void:
 	state.from_dict(d)
 	state.stock_mode = state.stock_mode and stock_default      # a direct-sales session (tests) never runs the warehouse economy
 	contracts.from_dict(state.contracts)
+	sales.from_dict(state.sales)
 	_bind_factories()
 	_apply_stock_migration()
 
@@ -89,6 +99,27 @@ func _apply_stock_migration() -> void:
 	for sim in factories:
 		if sim.state.unlocked:
 			sim.migrate_to_stock()
+	# Contracts that were being built from the old counters now hold real, reserved stock: nothing is lost
+	# and nothing is paid twice (a lorry that was loading still pays once when it leaves).
+	var books: Array[Contract] = []
+	books.append_array(contracts.offers)
+	books.append_array(contracts.active)
+	for c in books:
+		var sim := factory(c.factory)
+		if sim == null or not sim.stock_enabled() or c.sku != "":
+			continue
+		c.sku = String(sim.skus[0]["id"])
+		if c.status == Contract.Status.OFFER:
+			continue
+		var n := int(floorf(c.delivered + 1.0e-6))
+		sim.warehouse.add_existing(c.sku, n, true)
+		c.held = float(n)
+		c.delivered = float(n)
+		c.allocation = 0
+		if c.status == Contract.Status.DISPATCHING:
+			c.loading = float(n)
+		if c.status == Contract.Status.ACTIVE and c.remaining() <= ContractBook.EPS:
+			c.status = Contract.Status.READY
 
 
 func _mark_products_unlocked(def: FactoryDef) -> void:
@@ -104,6 +135,7 @@ func save_data() -> Dictionary:
 	for sim in factories:
 		sim.snapshot()
 	state.contracts = contracts.to_dict()
+	state.sales = sales.to_dict()
 	return state.to_dict()
 
 
@@ -138,6 +170,7 @@ func tick(dt: float) -> void:
 	for sim in factories:
 		if sim.state.unlocked:
 			sim.tick(dt)
+	sales.tick(dt)
 	contracts.tick(dt)       # after the factories, so a contract finished this tick beats its deadline
 
 
@@ -326,7 +359,14 @@ func _contract_market() -> Dictionary:
 func _on_contract_completed(c: Contract, base: float, bonus: float, _rep: int) -> void:
 	var sim := factory(c.factory)
 	if sim != null:
-		sim.credit_contract_payout(base + bonus)
+		# warehouse orders were paid lorry by lorry as they left (see _on_shipment_left): only the bonus is new
+		sim.credit_contract_payout(bonus if sim.stock_enabled() else base + bonus)
+
+
+func _on_shipment_left(c: Contract, _units: float, amount: float) -> void:
+	var sim := factory(c.factory)
+	if sim != null:
+		sim.credit_contract_payout(amount)
 
 
 func _on_contract_failed(c: Contract, _reason: String, units: float) -> void:

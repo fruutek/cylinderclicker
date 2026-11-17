@@ -30,6 +30,23 @@ var penalty := 0              # reputation lost if it fails
 var pallets := 1              # pallets shown on the dispatch pad
 var expires_in := 0.0         # offers only: seconds left on the board
 
+# --- warehouse orders (Expansion 4). In stock mode an order is filled from the factory's stock: `delivered`
+#     is every cylinder that exists for it = shipped + held; the planner builds what is still owed.
+var sku := ""                 # which product ("" = the factory's one product, direct-sales mode)
+var source := "board"         # "board" (accepted from the Contract Board) or "call" (a customer telephoned)
+var customer_id := ""         # the persistent customer behind a telephone order
+var mode := "full"            # call orders: "full" (all in stock), "partial" (ship now, backorder the rest), "delayed" (wait, ship in one go)
+var shipped := 0.0            # cylinders already on their way (paid for)
+var held := 0.0               # reserved in the warehouse for this order, not yet gone (includes `loading`)
+var loading := 0.0            # on the lorry that is loading now
+var paid_total := 0.0         # money received so far (never paid twice)
+var patience := 0.0           # call orders: seconds past the promise the customer will wait
+var promised := 0.0           # call orders: the delivery time promised on the phone (seconds after acceptance)
+var late := false             # past the promise
+var shipments := 0            # lorries sent
+var built := false            # every cylinder it needs now exists (shipped or reserved)
+var asked := 0                # call orders: what the customer first asked for (quantity may be less if they took what was available)
+
 var status: Status = Status.OFFER
 var allocation := 0           # % of the factory's output going to this contract
 var delivered := 0.0          # cylinders built for it so far (fractional: shipments are split exactly by share)
@@ -42,6 +59,15 @@ var dispatch_left := 0.0
 
 func remaining() -> float:
 	return maxf(float(quantity) - delivered, 0.0)
+
+
+## Cylinders still to be sent (not yet shipped).
+func outstanding() -> float:
+	return maxf(float(quantity) - shipped, 0.0)
+
+
+func is_call() -> bool:
+	return source == "call"
 
 
 func fraction() -> float:
@@ -73,6 +99,8 @@ func to_dict() -> Dictionary:
 		"status": STATUS_NAMES[status], "allocation": allocation, "delivered": delivered,
 		"elapsed": elapsed, "time_left": time_left, "bonus_earned": bonus_earned,
 		"dispatch_total": dispatch_total, "dispatch_left": dispatch_left,
+		"sku": sku, "source": source, "customer_id": customer_id, "mode": mode, "shipped": shipped, "held": held,
+		"loading": loading, "paid_total": paid_total, "patience": patience, "promised": promised, "late": late, "shipments": shipments, "asked": asked, "built": built,
 	}
 
 
@@ -113,6 +141,20 @@ static func from_dict(d: Variant) -> Contract:
 	c.bonus_earned = bool(d.get("bonus_earned", false))
 	c.dispatch_total = maxf(float(d.get("dispatch_total", 0.0)), 0.0)
 	c.dispatch_left = maxf(float(d.get("dispatch_left", 0.0)), 0.0)
+	c.sku = str(d.get("sku", ""))
+	c.source = str(d.get("source", "board"))
+	c.customer_id = str(d.get("customer_id", ""))
+	c.mode = str(d.get("mode", "full"))
+	c.shipped = clampf(float(d.get("shipped", 0.0)), 0.0, float(c.quantity))
+	c.held = clampf(float(d.get("held", 0.0)), 0.0, float(c.quantity) - c.shipped)
+	c.loading = clampf(float(d.get("loading", 0.0)), 0.0, c.held)
+	c.paid_total = maxf(float(d.get("paid_total", 0.0)), 0.0)
+	c.patience = maxf(float(d.get("patience", 0.0)), 0.0)
+	c.promised = maxf(float(d.get("promised", 0.0)), 0.0)
+	c.late = bool(d.get("late", false))
+	c.shipments = maxi(int(d.get("shipments", 0)), 0)
+	c.asked = maxi(int(d.get("asked", c.quantity)), 0)
+	c.built = bool(d.get("built", false))
 	if c.id == "" or c.customer == "" or c.factory == "" or c.quantity <= 0:
 		return null
 	return c
