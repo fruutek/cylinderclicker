@@ -21,7 +21,7 @@ state = {"factory_name": "Taylor & Sons", "cash": 2000000.0, "lifetime_earned": 
 json.dump({"game": "cylinder_clicker", "version": 2, "state": state}, open(sys.argv[1], "w"))
 PY
 run() {
-  "$GODOT" --headless --path . -- "--save-path=$SAVE" --root-bot=res://tests/expansion_flow_bot.gd "--phase=$1" 2>&1 \
+  "$GODOT" --headless --path . -- --direct-sales "--save-path=$SAVE" --root-bot=res://tests/expansion_flow_bot.gd "--phase=$1" 2>&1 \
     | grep -E "^  (ok|FAIL)|EXPANSION FLOW|EXPECT|SCRIPT ERROR" || true
 }
 run 1

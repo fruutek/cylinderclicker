@@ -6,6 +6,7 @@
     "wholesale_interval": 15.0,
     "wholesale_cap_fraction": 0.15,
     "target_cover_minutes": 3.0,
+    "target_fill_max": 0.8,
     "migration_cover_minutes": 8.0,
     "bays_max": 14
   },

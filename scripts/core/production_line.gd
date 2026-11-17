@@ -71,6 +71,8 @@ var batch := 1.0
 ## first station idle. Unset = the original behaviour (always one more base cylinder).
 var spawn_cb: Callable = Callable()
 var _manual := false
+var _click_age := 99.0          # seconds since the last click: a person is "working the line" for a few seconds after it
+const MANUAL_WINDOW := 4.0
 
 var _next_id := 1
 var _tick := 0
@@ -211,6 +213,7 @@ func all_tokens() -> Array[Token]:
 
 func tick(dt: float) -> void:
 	_tick += 1
+	_click_age = minf(_click_age + dt, 99.0)
 	var last := stations.size() - 1
 	_advance_belt(last, dt)
 	var out_belt := belts[last]
@@ -229,6 +232,7 @@ func tick(dt: float) -> void:
 func click() -> Array[int]:
 	var hit: Array[int] = []
 	_manual = true          # a person is working the line: the factory may stockpile beyond its targets
+	_click_age = 0.0
 	for i in stations.size():
 		var s := stations[i]
 		if s.token == null:
@@ -266,7 +270,7 @@ func _try_load(i: int) -> void:
 		_next_id += 1
 		t.count = batch
 		if spawn_cb.is_valid():
-			var plan: Dictionary = spawn_cb.call(_manual)
+			var plan: Dictionary = spawn_cb.call(_manual or _click_age < MANUAL_WINDOW)
 			if plan.is_empty():
 				_next_id -= 1
 				return          # nothing is wanted: the first station waits

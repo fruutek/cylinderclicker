@@ -60,7 +60,8 @@ func _ready() -> void:
 	data = GameData.new()
 	if not data.load_all():
 		push_error("Game: data files failed to load")
-	session = GameSession.new(data, true)
+	# "--direct-sales" keeps the v0.5.1 sell-on-completion rules: the older end-to-end flow tests pin that behaviour.
+	session = GameSession.new(data, not _user_args().has("--direct-sales"))
 	_load_settings()
 	# Dev tooling: "-- --root-bot=res://tests/x.gd" attaches a script that survives scene changes.
 	for arg in _user_args():

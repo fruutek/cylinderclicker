@@ -291,7 +291,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if not modal_open:
 				open_factory_overview()
 		KEY_C:
-			if not modal_open and company.contracts.unlocked:
+			if not modal_open and (company.contracts.unlocked or (company.state.stock_mode and company.sales.unlocked)):
 				open_contract_board()
 		KEY_1, KEY_2, KEY_3:
 			if not modal_open:
@@ -326,7 +326,8 @@ func _show_intro() -> void:
 
 func _show_offline(summary: Dictionary) -> void:
 	var trade: Dictionary = summary.get("contracts", {})
-	var d := ModalDialog.new("WELCOME BACK!", 330 if not trade.is_empty() else 280)
+	var office: Dictionary = summary.get("sales", {})
+	var d := ModalDialog.new("WELCOME BACK!", (330 if not trade.is_empty() else 280) + (36 if not office.is_empty() else 0))
 	d.esc_closes = false
 	var built := float(summary["cylinders"]) > 0.0
 	d.add_text("You were away for %s.%s" % [NumFmt.duration(summary["away_seconds"]), " Your machines kept the line running." if built else ""])
@@ -340,6 +341,13 @@ func _show_offline(summary: Dictionary) -> void:
 		d.add_text("Cylinders built:  %s\nSold for:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])] if not trade.is_empty() else "Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
 	if summary["capped"]:
 		d.add_text("(The factory runs unattended for up to %s.)" % NumFmt.duration(summary["counted_seconds"]), UiTheme.INK_SOFT)
+	if not office.is_empty():
+		var waiting := int(office.get("calls_waiting", 0))
+		var missed := int(office.get("missed", 0))
+		if waiting > 0:
+			d.add_text("%d customer%s waiting for a call back - see ORDERS." % [waiting, "s are" if waiting != 1 else " is"], Color("a9760a"))
+		if missed > 0:
+			d.add_text("%d call%s lapsed while you were away." % [missed, "s" if missed != 1 else ""], UiTheme.INK_SOFT)
 	if not trade.is_empty():
 		_add_contract_summary(d, trade)
 	d.add_button("Lovely!", func() -> void: Sfx.play("sale"))
@@ -394,6 +402,9 @@ func _connect_contracts() -> void:
 	book.completed.connect(_on_contract_completed)
 	book.failed.connect(_on_contract_failed)
 	book.rank_changed.connect(_on_rank_changed)
+	book.shipment_left.connect(_on_shipment_left)
+	book.order_ended.connect(_on_order_ended)
+	company.sales.call_arrived.connect(_on_call_arrived)
 
 
 func _on_board_unlocked() -> void:
@@ -427,7 +438,37 @@ func _on_contract_failed(c: Contract, reason: String, units: float) -> void:
 	if reason == "cancelled":
 		return
 	Sfx.play("deny")
+	if company.factory(c.factory).stock_enabled():
+		_toast("%s: %s. The stock set aside went back on the shelves, reputation -%d." % [c.customer, "deadline missed" if reason == "deadline" else "order given up", c.penalty], Color("ff8a70"), 6.0)
+		return
 	_toast("%s: %s. %s cylinders sold, reputation -%d." % [c.customer, "deadline missed" if reason == "deadline" else "order given up", NumFmt.number(units), c.penalty], Color("ff8a70"), 6.0)
+
+
+## The telephone rings: a customer wants stock. Answer it on the CALLS tab of the board.
+func _on_call_arrived(call: Dictionary) -> void:
+	if _is_board_open():
+		Sfx.play("ring", 0.0, -8.0)
+		return
+	Sfx.play("ring", 0.0, -4.0)
+	var cust := company.sales.find_customer(str(call["customer"]))
+	_toast("The phone is ringing: %s. Tap ORDERS." % str(cust.get("name", "a customer")) if UiTheme.touch else "The phone is ringing: %s. Open ORDERS (C)." % str(cust.get("name", "a customer")), UiTheme.GOLD, 5.0)
+
+
+## A warehouse lorry has left: money for the cylinders on it.
+func _on_shipment_left(c: Contract, units: float, amount: float) -> void:
+	if c.shipped < float(c.quantity) - ContractBook.EPS:        # the last lorry has its own "delivered" message
+		Sfx.play("sale")
+		_toast("Lorry to %s: %s cylinders, +%s" % [c.customer, NumFmt.number(units), NumFmt.money(amount)], UiTheme.GOLD, 4.0)
+
+
+func _on_order_ended(c: Contract, outcome: String) -> void:
+	match outcome:
+		"complete", "late_complete":
+			Sfx.play("ding")
+			_toast("Order complete for %s: %s paid in total." % [c.customer, NumFmt.money(c.paid_total)], UiTheme.GOLD, 5.0)
+		_:
+			Sfx.play("deny")
+			_toast("%s gave up waiting. The rest of the order is cancelled." % c.customer, Color("ff8a70"), 6.0)
 
 
 func _on_rank_changed(index: int, rank_name: String) -> void:

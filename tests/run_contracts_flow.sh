@@ -24,7 +24,7 @@ json.dump({"game": "cylinder_clicker", "version": 3, "state": state}, open(sys.a
 PY
 run() {
   # Needs a window for the interface: use xvfb if there is no display.
-  local cmd=("$GODOT" --path . --rendering-driver opengl3 -- "--save-path=$SAVE" --root-bot=res://tests/contracts_flow_bot.gd "--phase=$1")
+  local cmd=("$GODOT" --path . --rendering-driver opengl3 -- --direct-sales "--save-path=$SAVE" --root-bot=res://tests/contracts_flow_bot.gd "--phase=$1")
   if [ -z "${DISPLAY:-}" ]; then cmd=(xvfb-run -a -s "-screen 0 1280x720x24" "${cmd[@]}"); fi
   "${cmd[@]}" 2>&1 | grep -E "^  (ok|FAIL)|CONTRACTS FLOW|EXPECT|SCRIPT ERROR" || true
 }

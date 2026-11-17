@@ -375,6 +375,15 @@ func _fill_tooltip(id: String) -> void:
 		var entry: Dictionary = _product_entries[id]
 		_tip_title.text = String(entry["name"]).to_upper()
 		_tip_body.text = entry["desc"]
+		if entry.has("sku"):
+			var i := session.sku_index(str(entry["id"]))
+			if i >= 0 and session.sku_available(i):
+				_tip_detail.text = "Profit %s each, %s as long to build as the standard cylinder." % [NumFmt.money(session.sku_profit(i)), NumFmt.number(session.sku_work(i), 2) + "x"]
+				_tip_detail.add_theme_color_override("font_color", UiTheme.GREEN)
+			else:
+				_tip_detail.text = session.sku_requirement_text(i)
+				_tip_detail.add_theme_color_override("font_color", UiTheme.RED)
+			return
 		if company.unlocked_products.has(entry["id"]):
 			_tip_detail.text = "In production."
 			_tip_detail.add_theme_color_override("font_color", UiTheme.GREEN)
@@ -434,7 +443,13 @@ func _build_products(page: Control) -> void:
 
 	var y := 72.0
 	var cat := session.catalog
-	for section: Array in [["MATERIALS", cat.materials()], ["RANGES", cat.ranges()], ["VARIANTS", cat.variants()]]:
+	var sections: Array = [["MATERIALS", cat.materials()], ["RANGES", cat.ranges()], ["VARIANTS", cat.variants()]]
+	if session.stock_enabled():
+		var list: Array = []
+		for sk: Dictionary in session.skus:
+			list.append({"id": sk["id"], "name": sk["name"], "desc": sk["desc"], "sku": true})
+		sections = [["PRODUCTS", list]]
+	for section: Array in sections:
 		var head := UiTheme.label(section[0], UiTheme.COPPER.darkened(0.25))
 		head.position = Vector2(2, y)
 		page.add_child(head)
@@ -485,6 +500,21 @@ func _on_product_tapped(key: String, row: Control) -> void:
 
 func _refresh_products() -> void:
 	if _product_card == null or _current_tab != 2:
+		return
+	if session.stock_enabled():
+		var cur := session.current_sku
+		var mk := session.sku_mfg(cur)
+		_product_card.text = "%s\nSale price   %s\nMaterials   -%s%s\nProfit each  %s" % [
+			String(session.skus[cur]["name"]).to_upper(), NumFmt.money(session.sku_price(cur)), NumFmt.money(session.sku_material(cur)),
+			("\nMaking      -%s" % NumFmt.money(mk)) if mk > 0.0 else "", NumFmt.money(session.sku_profit(cur))]
+		for key2: String in _product_rows:
+			var entry2: Dictionary = _product_entries[key2]
+			var i := session.sku_index(str(entry2["id"]))
+			var ok := i >= 0 and session.sku_available(i)
+			var row2: Dictionary = _product_rows[key2]
+			(row2["status"] as Label).text = ("%s each" % NumFmt.money(session.sku_profit(i))) if ok else "LOCKED"
+			(row2["status"] as Label).add_theme_color_override("font_color", UiTheme.GREEN if ok else UiTheme.INK_SOFT)
+			(row2["name"] as Label).add_theme_color_override("font_color", UiTheme.INK if ok else UiTheme.INK_SOFT)
 		return
 	var making := session.manufacturing_cost()
 	_product_card.text = "%s\nSale price   %s\nMaterials   -%s%s\nProfit each  %s" % [

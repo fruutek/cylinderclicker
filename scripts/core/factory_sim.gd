@@ -43,6 +43,7 @@ var current_sku := 0                   # what the first station was last loaded 
 var _planner_clock := 0.0
 var _planner_idle_until := 0.0
 var _offline_budget := 0.0
+var _prod_ema := 0.0                   # cylinders a second actually made, smoothed over about two minutes (what customers sense)
 
 
 func _init(p_def: FactoryDef, p_catalog: ProductCatalog, p_skus: SkuCatalog = null) -> void:
@@ -159,6 +160,7 @@ func tick(dt: float) -> void:
 		_income_buckets.pop_front()
 		_income_buckets.append(0.0)
 	_planner_clock += dt
+	_prod_ema += (_buckets_last_rate() - _prod_ema) * minf(dt / 40.0, 1.0)
 	line.tick(dt)
 	if stock_enabled():
 		state.wholesale_timer += dt
@@ -461,14 +463,25 @@ func cover_target(i: int) -> int:
 		if sku_available(j):
 			total_weight += float(skus[j].get("weight", 1.0))
 	var share := float(skus[i].get("weight", 1.0)) / maxf(total_weight, 1.0)
-	var rate := maxf(steady_rate(), planning_rate(1.5, 0.85)) * 60.0       # cylinders a minute
-	var units := sku_catalog.num("target_cover_minutes", 3.0) * rate * share
-	return maxi(int(ceilf(units)), int(skus[i].get("default_target", 0)))
+	var rate := maxf(steady_rate(), demand_rate()) * 60.0       # cylinders a minute
+	var units := sku_catalog.num("target_cover_minutes", 3.0) * rate
+	var limit := float(warehouse.capacity) * sku_catalog.num("target_fill_max", 0.8)
+	units = minf(units, limit)                                   # never plan to hold more than the shelves take
+	return maxi(int(ceilf(units * share)), int(skus[i].get("default_target", 0)))
 
 
 ## Cylinders customers are waiting for that are not yet in stock or on the line.
 func backlog(i: int) -> float:
 	return sales.backlog(data.id, sku_id(i)) if sales != null else 0.0
+
+
+## Line time (in "baseline cylinders") the factory still owes its customers and the cylinders on the belts:
+## every product shares the same line, so a promise has to count all of it.
+func owed_work() -> float:
+	var work := 0.0
+	for i in skus.size():
+		work += (backlog(i) - float(warehouse.wip.get(sku_id(i), 0.0))) * sku_work(i)
+	return maxf(work, 0.0)
 
 
 func planner_wake() -> void:
@@ -484,7 +497,8 @@ func planner_pick(manual: bool) -> int:
 		if not sku_available(i):
 			continue
 		var id := sku_id(i)
-		if int(floorf(warehouse.free_space() / warehouse.space_of(id) + 1e-9)) < 1:
+		var spill := manual and state.wholesale_on          # a person is working the line and the wholesaler will take the surplus
+		if not spill and int(floorf(warehouse.free_space() / warehouse.space_of(id) + 1e-9)) < 1:
 			continue
 		var wip := float(warehouse.wip.get(id, 0.0))
 		var key := INF
@@ -523,10 +537,26 @@ func _spawn(manual: bool) -> Dictionary:
 		return {}
 	var id := sku_id(pick)
 	var room := floorf(warehouse.free_space() / warehouse.space_of(id) + 1e-9)
+	if manual and state.wholesale_on:
+		room = maxf(room, line.batch)
 	var count := clampf(line.batch, 1.0, maxf(1.0, minf(planner_need(pick, manual), room)))
 	warehouse.wip[id] = float(warehouse.wip.get(id, 0.0)) + count
 	current_sku = pick
 	return {"sku": pick, "work_mult": sku_work(pick), "count": count}
+
+
+## Instantaneous output of the last few seconds (cylinders a second), the input to the smoothed rate.
+func _buckets_last_rate() -> float:
+	var total := 0.0
+	for b in _buckets:
+		total += b
+	return total / float(RATE_WINDOW)
+
+
+## What customers believe the factory can supply: its planning rate, or what it has really been making if that is more
+## (a person clicking hard builds more than the cautious estimate). Orders and calls are sized from this.
+func demand_rate() -> float:
+	return maxf(planning_rate(1.5, 0.85), _prod_ema)
 
 
 ## Finished cylinders come off the line into the warehouse. Nothing is sold here.

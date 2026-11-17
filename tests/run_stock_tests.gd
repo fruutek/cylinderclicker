@@ -41,6 +41,8 @@ func near(a: float, b: float, tol: float, what: String) -> void:
 func stock_session() -> GameSession:
 	var c := GameSession.new(_data, true)
 	c.contracts.reset(1)
+	for sim in c.factories:
+		sim.state.auto_targets = false        # these tests set targets by hand
 	return c
 
 
@@ -382,7 +384,7 @@ func test_offline_stock() -> void:
 	var r := c.apply_offline(3600.0)
 	check(not r.is_empty() and float(r["cylinders"]) > 0.0, "an automated factory builds while you are away")
 	check(copper.warehouse.total("CU-IND") <= copper.warehouse.capacity, "offline production respects the warehouse")
-	check(copper.warehouse.total("CU-IND") <= 10 + 3 and copper.warehouse.total("CU-DIR") <= 5 + 3, "...and the targets (IND %d, DIR %d)" % [copper.warehouse.total("CU-IND"), copper.warehouse.total("CU-DIR")])
+	check(copper.warehouse.available("CU-IND") <= 10 + 3 and copper.warehouse.available("CU-DIR") <= 5 + 3, "...and the targets, apart from what customers took (IND %d free, DIR %d free)" % [copper.warehouse.available("CU-IND"), copper.warehouse.available("CU-DIR")])
 	near(float(r["cash"]), c.state.cash, 0.01, "offline cash is the cash that was earned (no double counting)")
 	check(conserved(copper) == "" and copper.warehouse.validate() == "", "stock accounting survives offline time: " + conserved(copper))
 	copper.state.targets = {"CU-IND": 0, "CU-DIR": 0, "CU-HOR": 0, "CU-SLM": 0}

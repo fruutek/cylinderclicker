@@ -142,25 +142,6 @@
       "stock": true
     },
     {
-      "id": "stock_planner",
-      "name": "Stock Planner",
-      "icon": "lean",
-      "base_cost": 3000,
-      "cost_growth": 2.0,
-      "max_level": 1,
-      "unlock_at": 12000,
-      "desc": "Planning software that keeps every factory's stock targets at the sales rep's recommendation automatically.",
-      "effect_text": "Targets set themselves",
-      "effects": [
-        {
-          "stat": "auto_targets",
-          "op": "add",
-          "value": 1.0
-        }
-      ],
-      "stock": true
-    },
-    {
       "id": "horizontal_tooling",
       "name": "Horizontal Tooling",
       "icon": "weld",

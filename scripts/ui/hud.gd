@@ -227,18 +227,23 @@ func _process(delta: float) -> void:
 
 	var per_min := session.recent_rate_per_min()
 	_income.text = "%s/sec" % NumFmt.money(company.recent_income_per_second())
-	_product.text = session.data.hud_product if session.data.hud_product != "" else String(session.product["name"])
-	_profit.text = NumFmt.money(session.profit_per_cylinder())
+	if session.stock_enabled():
+		_product.text = String(session.skus[session.current_sku]["name"])
+		_profit.text = NumFmt.money(session.sku_profit(session.current_sku))
+	else:
+		_product.text = session.data.hud_product if session.data.hud_product != "" else String(session.product["name"])
+		_profit.text = NumFmt.money(session.profit_per_cylinder())
 	_made.text = NumFmt.number(session.state.cylinders_made)
 	_rate.text = "%s/min" % NumFmt.number(per_min, 1)
 
 	# Orders: appears once customers start calling, with a badge for anything waiting for you
 	# (orders ready to dispatch, new offers) and a gold glow when a lorry can be sent.
 	var book := company.contracts
-	_orders.visible = book.unlocked
-	if book.unlocked:
-		var ready := book.count_status(Contract.Status.READY)
-		var waiting := ready + unseen_offers
+	var calls := company.sales.calls.size() if company.state.stock_mode else 0
+	_orders.visible = book.unlocked or (company.state.stock_mode and company.sales.unlocked)
+	if _orders.visible:
+		var ready := book.count_status(Contract.Status.READY) + (1 if calls > 0 else 0)
+		var waiting := ready - (1 if calls > 0 else 0) + unseen_offers + calls
 		if waiting != _badge_shown:
 			_badge_shown = waiting
 			_badge.visible = waiting > 0

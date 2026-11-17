@@ -36,6 +36,7 @@ var _overlay_layer: Node2D
 var _fx_layer: Node2D
 var _van: Sprite2D
 var _yard: DispatchYard
+var _stock_yard: StockYard
 var _fronts: Array[Sprite2D] = []
 var _workers: Array[Sprite2D] = []
 var _cabinets: Array[Sprite2D] = []
@@ -105,6 +106,13 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 	_yard = DispatchYard.new()
 	add_child(_yard)
 	_yard.setup(session, self, _van_pos)
+
+	# Finished goods: the warehouse racking fills with pallets as stock arrives (stock mode only).
+	if session.stock_enabled():
+		var rect: Array = view.get("stock_rect", [192, 160, 200, 62])
+		_stock_yard = StockYard.new()
+		add_child(_stock_yard)
+		_stock_yard.setup(session, Rect2(float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])))
 
 	_token_layer = _make_layer(_draw_tokens)
 

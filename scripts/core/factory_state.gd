@@ -16,7 +16,7 @@ var warehouse: Dictionary = {}        # saved Warehouse (stock, reserved, counte
 var targets: Dictionary = {}          # sku id -> stock level automatic production works towards
 var priority: Array = []              # sku ids, most important first (ties in the planner)
 var auto_production := true           # replenish stock towards the targets by itself
-var auto_targets := false             # keep the targets at the sales rep's recommendation
+var auto_targets := true              # keep the targets at the sales rep's recommendation
 var wholesale_on := true              # surplus above target (and overflow) may go to the wholesaler
 var wholesale_timer := 0.0
 
@@ -73,6 +73,6 @@ func from_dict(d: Dictionary) -> void:
 		for v: Variant in pr:
 			priority.append(str(v))
 	auto_production = bool(d.get("auto_production", true))
-	auto_targets = bool(d.get("auto_targets", false))
+	auto_targets = bool(d.get("auto_targets", true))
 	wholesale_on = bool(d.get("wholesale_on", true))
 	wholesale_timer = maxf(float(d.get("wholesale_timer", 0.0)), 0.0)

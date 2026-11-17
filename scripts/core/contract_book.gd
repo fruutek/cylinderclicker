@@ -935,10 +935,12 @@ func auto_dispatch(instant: bool) -> void:
 
 
 func _wants_lorry(c: Contract) -> bool:
+	var blocked := port.free_space(c.factory) < 1.0          # reserved stock has filled the shelves and stopped the line
 	if not c.is_call():
-		# A board contract waits for you to send it (a complete load earns its bonus) unless the stock
-		# held for it has filled the warehouse and stopped the line.
-		return port.free_space(c.factory) < 1.0
+		# A board contract waits for you to send it (a complete load earns its bonus) unless the line is blocked.
+		return blocked
+	if blocked:
+		return true
 	var owed := float(c.quantity) - c.shipped
 	var all_ready := c.held >= owed - EPS
 	match c.mode:

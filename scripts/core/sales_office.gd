@@ -30,10 +30,11 @@ var calls: Array[Dictionary] = []          # waiting on the player, newest last
 var timers: Dictionary = {}                # factory id -> seconds to its next call
 var observed: Dictionary = {}              # factory id -> [recently requested sku ids]
 var lost: Dictionary = {}                  # sku id -> cylinders customers wanted that we did not supply
-var stats := {"calls": 0, "accepted": 0, "declined": 0, "rejected": 0, "missed": 0, "units_ordered": 0.0}
+var stats := {"calls": 0, "accepted": 0, "declined": 0, "rejected": 0, "missed": 0, "rep_orders": 0, "units_ordered": 0.0}
 var _missed_offline := 0
 var _calls_offline := 0
 var _was_offline := false
+var _rep_orders_before := 0
 
 
 func _init(raw: Dictionary = {}, rules: ContractRules = null) -> void:
@@ -59,7 +60,7 @@ func reset(p_seed: int = -1) -> void:
 	timers.clear()
 	observed.clear()
 	lost.clear()
-	stats = {"calls": 0, "accepted": 0, "declined": 0, "rejected": 0, "missed": 0, "units_ordered": 0.0}
+	stats = {"calls": 0, "accepted": 0, "declined": 0, "rejected": 0, "missed": 0, "rep_orders": 0, "units_ordered": 0.0}
 	_missed_offline = 0
 	_calls_offline = 0
 	_was_offline = false
@@ -259,11 +260,11 @@ func advance(dt: float) -> void:
 	if factories.is_empty():
 		return
 	if not unlocked:
-		var earned := 0.0
+		# Customers start ringing once there is something on the shelves to talk about (or money has been made).
+		var made := 0.0
 		for sim in factories:
-			earned += sim.company.lifetime_earned
-			break
-		if earned < num("unlock_earned", 30.0):
+			made += sim.state.cylinders_made
+		if made < num("unlock_made", 8.0) and factories[0].company.lifetime_earned < num("unlock_earned", 30.0):
 			return
 		unlocked = true
 		_ensure_customers()
@@ -283,7 +284,7 @@ func advance(dt: float) -> void:
 
 
 func _next_gap(sim: FactorySim, call: Dictionary) -> float:
-	var rate := sim.planning_rate(1.5, 0.85)
+	var rate := sim.demand_rate()
 	var qty := float(call.get("qty", 4)) if not call.is_empty() else maxf(rate * num("order_minutes", 1.5) * 60.0, num("min_order", 2.0))
 	var gap := qty / maxf(num("demand_vs_capacity", 1.25) * maxf(rate, 0.005), 1e-6)
 	var avg := 0.0
@@ -342,11 +343,13 @@ func _choose_sku(sim: FactorySim, cust: Dictionary) -> int:
 
 
 func typical_quantity(sim: FactorySim, cust: Dictionary, sku_i: int) -> int:
-	var rate := sim.planning_rate(1.5, 0.85)
+	var rate := sim.demand_rate()
 	var rel := float(cust["rel"]) / 100.0
 	var jitter := 0.6 + 0.8 * _unit([seed_value, serial, "qty"])
 	var qty := rate * num("order_minutes", 1.5) * 60.0 * float(cust["size"]) * (0.85 + 0.4 * rel) * jitter / maxf(sim.sku_work(sku_i), 0.5)
-	return maxi(int(roundf(qty)), int(num("min_order", 2.0)))
+	# An order has to fit on the shelves and a lorry: a small warehouse means small orders.
+	var fit := int(floorf(float(sim.warehouse.capacity) * num("order_fit", 0.75)))
+	return maxi(mini(int(roundf(qty)), fit), int(num("min_order", 2.0)))
 
 
 func _new_call(sim: FactorySim) -> Dictionary:
@@ -383,6 +386,8 @@ func _remember_request(factory_id: String, sku: String) -> void:
 
 
 func _expire(call: Dictionary) -> void:
+	if _rep_answer(call):
+		return                      # nobody picked up: the sales rep took the order (at a worse price)
 	calls.erase(call)
 	var cust := find_customer(str(call["customer"]))
 	_note_lost(str(call["sku"]), float(call["qty"]))
@@ -393,6 +398,30 @@ func _expire(call: Dictionary) -> void:
 		if _was_offline:
 			_missed_offline += 1
 	call_closed.emit(call, "expired")
+
+
+## While nobody answers, the sales rep does: the best offer that is likely to be taken, at a weaker price.
+## This is what keeps a factory selling when you are away from the telephone (or the game).
+func _rep_answer(call: Dictionary) -> bool:
+	if find_call(str(call["id"])).is_empty():
+		return false
+	var opts: Array = options_for(call)
+	var pick := ""
+	for want: String in ["full", "partial", "delayed", "available"]:
+		for o: Dictionary in opts:
+			if o["id"] == want and (want == "full" or float(o["chance"]) >= 0.45):
+				pick = want
+				break
+		if pick != "":
+			break
+	if pick == "":
+		return false
+	call["factor"] = float(call["factor"]) * num("rep_price_factor", 0.92)
+	var r: Dictionary = answer(str(call["id"]), pick)
+	if bool(r.get("accepted", false)):
+		stats["rep_orders"] = int(stats["rep_orders"]) + 1
+		return true
+	return find_call(str(call["id"])).is_empty()
 
 
 func _note_lost(sku: String, units: float) -> void:
@@ -443,12 +472,10 @@ func options_for(call: Dictionary) -> Array:
 	var avail := sim.warehouse.available(sku)
 	var ship_now := mini(avail, qty)
 	var rest := qty - ship_now
-	var rate := sim.sku_rate_per_min(i) / 60.0
-	var ahead := book.backlog(sim.data.id, sku) if book != null else 0.0
-	var wip := float(sim.warehouse.wip.get(sku, 0.0))
+	var base_rate := sim.planning_rate(1.5, 0.85)                   # baseline cylinders a second the line can build
 	var eta := INF
-	if rate > 0.0 and sim.sku_available(i):
-		eta = (maxf(ahead + float(rest) - wip, 0.0)) / rate + 8.0
+	if base_rate > 0.0 and sim.sku_available(i):
+		eta = (sim.owed_work() + float(rest) * sim.sku_work(i)) / base_rate + 8.0    # everything already promised is built first
 	var rel := float(cust["rel"]) / 100.0
 	var pat := float(cust["patience"]) * 60.0 * (0.8 + 0.6 * rel)
 	var relb := 0.25 * (rel - 0.3)
@@ -467,11 +494,12 @@ func options_for(call: Dictionary) -> Array:
 			var chance_b := (0.25 + 0.75 * pow(f, 1.2)) * (1.0 - 0.35 * float(cust["reliability"]) * (1.0 - f))
 			out.append(_option("available", "Only what we have", ship_now, 0, 0.0, chance_b + relb, unit * float(ship_now),
 				"Ships %d now and nothing more. They may not want a part order." % ship_now))
-		var chance_d := 0.85 - 0.1 * float(cust["reliability"])
-		if eta > pat:
-			chance_d *= clampf(pat / eta, 0.1, 1.0)
-		out.append(_option("delayed", "Full order, delivered later", 0, rest, eta, chance_d + relb, unit * float(qty),
-			"All %d ship together in about %s." % [qty, NumFmt.duration(eta)]))
+		if qty <= sim.warehouse.capacity:         # a delayed order waits on the shelves, so it has to fit there
+			var chance_d := 0.85 - 0.1 * float(cust["reliability"])
+			if eta > pat:
+				chance_d *= clampf(pat / eta, 0.1, 1.0)
+			out.append(_option("delayed", "Full order, delivered later", 0, rest, eta, chance_d + relb, unit * float(qty),
+				"All %d ship together in about %s." % [qty, NumFmt.duration(eta)]))
 	out.append(_option("decline", "Decline", 0, 0, 0.0, 1.0, 0.0, "Turn the order down. Doing it often costs you the customer."))
 	for o: Dictionary in out:
 		if o["id"] != "decline":
@@ -635,7 +663,7 @@ func forecast(sim: FactorySim, with_target: bool = true) -> Array:
 	for s: Variant in seen:
 		counts[str(s)] = int(counts.get(str(s), 0)) + 1
 	var q := forecast_quality(sim) * clampf(float(seen.size()) / 20.0, 0.0, 1.0)
-	var rate_min := maxf(sim.steady_rate(), sim.planning_rate(1.5, 0.85)) * 60.0
+	var rate_min := maxf(sim.steady_rate(), sim.demand_rate()) * 60.0
 	var demand := num("demand_vs_capacity", 1.25) * rate_min
 	var shares: Array[float] = []
 	var sum := 0.0
@@ -650,12 +678,16 @@ func forecast(sim: FactorySim, with_target: bool = true) -> Array:
 		shares.append(share)
 		sum += share
 	var cover := (sim.sku_catalog.num("target_cover_minutes", 3.0)) * num("cover_safety", 1.15)
+	# the recommendations as a whole must fit on the shelves: shrink them together if they do not
+	var wanted := cover * demand
+	var limit := float(sim.warehouse.capacity) * sim.sku_catalog.num("target_fill_max", 0.8)
+	var squeeze := minf(1.0, limit / maxf(wanted, 0.001))
 	for n in pool.size():
 		var i := pool[n]
 		var id := sim.sku_id(i)
 		var share := shares[n] / sum
 		var per_min := demand * share
-		var rec := maxi(int(ceilf(cover * per_min)), 1 if share >= 0.05 else 0)
+		var rec := maxi(int(ceilf(cover * per_min * squeeze)), 1 if share >= 0.05 else 0)
 		var stock := sim.warehouse.total(id)
 		rows.append({
 			"sku": id, "name": str(sim.skus[i]["name"]), "short": str(sim.skus[i].get("short", sim.skus[i]["name"])), "index": i,
@@ -681,18 +713,25 @@ func recommended(factory_id: String, sku_id: String) -> int:
 ## Unattended time passes in slices (see GameSession.apply_offline): orders age and ship, calls arrive
 ## but never pile up (at most `max_queued` wait, older ones lapse), and nothing is double counted.
 func offline_step(dt: float) -> void:
+	if not _was_offline:
+		_rep_orders_before = int(stats["rep_orders"])
 	_was_offline = true
 	if book != null:
 		book.offline_stock_step(dt)
 	if enabled and book != null:
 		advance(dt)
+		# Away from the telephone, the rep takes every call that has been ringing for a minute; only the last
+		# minute's calls (at most three) are left for you.
+		for call in calls.duplicate():
+			if float(call["expires_in"]) <= num("call_expiry", 150.0) - 60.0:
+				_expire(call)
 
 
 func offline_report() -> Dictionary:
 	if not _was_offline:
 		return {}
 	_was_offline = false
-	var report := {"calls_waiting": calls.size(), "missed": _missed_offline, "calls": _calls_offline}
+	var report := {"calls_waiting": calls.size(), "missed": _missed_offline, "calls": _calls_offline, "rep_orders": int(stats["rep_orders"]) - _rep_orders_before}
 	_missed_offline = 0
 	_calls_offline = 0
-	return report if (calls.size() > 0 or int(report["missed"]) > 0) else {}
+	return report if (calls.size() > 0 or int(report["missed"]) > 0 or int(report["rep_orders"]) > 0) else {}

@@ -49,6 +49,8 @@ func company(automated: bool = true) -> GameSession:
 		for m: Dictionary in c.factory("copper").data.machines:
 			c.factory("copper").state.upgrade_levels[m["id"]] = 6
 		c.factory("copper").refresh()
+	for sim in c.factories:
+		sim.state.auto_targets = false        # these tests set targets by hand
 	c.sales.advance(0.1)
 	c.sales.timers = {"copper": 3000.0, "stainless": 3000.0}      # no random calls unless a test asks for one
 	return c
@@ -125,12 +127,23 @@ func test_customers_and_calls() -> void:
 		check(i >= 0 and copper.sku_available(i), "customers only ask for what the factory can make (%s)" % call["sku"])
 		check(int(call["qty"]) >= 2, "an order is for at least two cylinders")
 	check(c.sales.call_text(c.sales.calls[0]).length() > 10, "the call has something to say: " + c.sales.call_text(c.sales.calls[0]))
-	# Unanswered calls lapse and the customer remembers.
+	# Unanswered calls are taken by the sales rep (at a weaker price) - unless it cannot, then the customer remembers.
 	var cust: Dictionary = c.sales.find_customer(str(c.sales.calls[0]["customer"]))
 	var rel_before := float(cust["rel"])
+	c.sales.cfg["max_open_orders"] = 0
 	for i in 200:
 		c.sales.advance(1.0)
-	check(int(c.sales.stats["missed"]) >= 1 and float(cust["rel"]) <= rel_before, "a missed call counts against the relationship")
+	check(int(c.sales.stats["missed"]) >= 1 and float(cust["rel"]) <= rel_before, "a call nobody can take counts against the relationship")
+	c.sales.cfg["max_open_orders"] = 6
+	c.sales.calls.clear()
+	var d := call_for(c, "CU-IND", 6, 2)
+	d["factor"] = 1.0
+	c.sales.advance(0.1)
+	c.state.cash = 0.0
+	stock(c, "CU-IND", 8) if c.factory("copper").warehouse.available("CU-IND") < 6 else null
+	for i in 200:
+		c.sales.advance(1.0)
+	check(int(c.sales.stats["rep_orders"]) >= 1 and c.contracts.active.size() + c.contracts.history.size() >= 1, "left to ring, the call is answered by the sales rep (%d orders)" % int(c.sales.stats["rep_orders"]))
 	# Same seed, same calls.
 	var a := GameSession.new(_data, true)
 	var b := GameSession.new(_data, true)
@@ -331,6 +344,8 @@ func test_relationship_rules() -> void:
 	check(float(cust["rel"]) == 100.0, "enough completed orders allow full loyalty")
 	# Better relationship: bigger orders, better price, more calls.
 	var sim := c.factory("copper")
+	sim.state.upgrade_levels["warehouse"] = 8              # room enough that order size is not capped by the shelves
+	sim.refresh()
 	var poor := cust.duplicate(true)
 	poor["rel"] = 5.0
 	var good := cust.duplicate(true)
@@ -597,9 +612,12 @@ func test_offline_orders() -> void:
 	d.sales.timers["stainless"] = 3000.0
 	d.apply_offline(6.0 * 3600.0)
 	check(d.sales.calls.size() <= 3, "a six-hour absence leaves at most three calls (%d)" % d.sales.calls.size())
-	check(int(d.sales.stats["calls"]) > 3 and int(d.sales.stats["missed"]) > 0, "more rang than are waiting: the rest lapsed (%d calls, %d missed)" % [d.sales.stats["calls"], d.sales.stats["missed"]])
+	check(int(d.sales.stats["calls"]) > 3 and int(d.sales.stats["rep_orders"]) > 3, "more rang than are waiting: the sales rep took the rest (%d calls, %d taken)" % [d.sales.stats["calls"], d.sales.stats["rep_orders"]])
+	var rel_total := 0.0
 	for cu: Dictionary in d.sales.customers:
-		check(float(cu["rel"]) >= 14.0, "lapsed calls cost little: %s is at %.1f" % [cu["name"], float(cu["rel"])])
+		rel_total += float(cu["rel"])
+	check(rel_total / float(d.sales.customers.size()) >= 15.0, "customers are not driven away by unattended time (average %.1f)" % (rel_total / float(d.sales.customers.size())))
+	check(d.state.cash > 0.0, "the rep's orders were delivered and paid while away (%.0f)" % d.state.cash)
 	check(r.has("cash") and float(r["cash"]) >= 0.0, "the summary carries the cash earned")
 
 

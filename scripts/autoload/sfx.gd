@@ -15,9 +15,10 @@ const SOUNDS := {
 	"ding": preload("res://assets/audio/ding.wav"),
 	"engine": preload("res://assets/audio/engine.wav"),
 	"stamp": preload("res://assets/audio/stamp.wav"),
+	"ring": preload("res://assets/audio/ring.wav"),
 }
 const MUSIC := preload("res://assets/audio/music.ogg")
-const MIN_INTERVAL := {"click": 0.04, "sale": 0.12, "thunk": 0.1, "beep": 0.5, "engine": 0.5}
+const MIN_INTERVAL := {"click": 0.04, "sale": 0.12, "thunk": 0.1, "beep": 0.5, "engine": 0.5, "ring": 1.5}
 const POOL_SIZE := 10
 
 var _players: Array[AudioStreamPlayer] = []
