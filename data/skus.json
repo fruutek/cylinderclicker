@@ -2,7 +2,7 @@
   "_comment": "Stock-keeping units: every cylinder the company can make and hold. A SKU belongs to one factory and is a variant of that factory's base product (data/products.json): the multipliers are relative to it, so 'Copper Indirect' is exactly the original Copper Cylinder. 'work_mult' scales every station's work (slower or quicker to make), 'weight' is the relative likelihood that an incoming order asks for it, 'requires' lists specialist machinery (upgrades at that factory) that must be bought before it can be made. Premium variants are worth more per cylinder but never more per minute of line time than the baseline. 'warehouse' holds the stock-room and wholesale tuning.",
   "warehouse": {
     "per_pallet": 6,
-    "wholesale_share": 0.8,
+    "wholesale_share": 0.85,
     "wholesale_interval": 15.0,
     "wholesale_cap_fraction": 0.15,
     "target_cover_minutes": 3.0,

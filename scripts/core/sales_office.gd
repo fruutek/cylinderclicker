@@ -234,7 +234,7 @@ func _change_rel(cust: Dictionary, delta: float) -> void:
 func price_factor(cust: Dictionary) -> float:
 	var rel := float(cust["rel"]) / 100.0
 	var ps := float(cust["price_sens"])
-	return 1.0 + num("price_premium_max", 0.12) * rel * (1.0 - 0.5 * ps) + 0.02 - 0.03 * ps
+	return 1.0 + num("price_premium_max", 0.16) * rel * (1.0 - 0.5 * ps) + 0.04 - 0.03 * ps
 
 
 # ------------------------------------------------------------------- time

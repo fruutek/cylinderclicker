@@ -14,7 +14,7 @@
     "customers_per_rank": 2,
     "promise_slack": 1.25,
     "rep_price_factor": 0.92,
-    "price_premium_max": 0.12,
+    "price_premium_max": 0.16,
     "relationship_start": 20.0,
     "relationship_cap_base": 15.0,
     "relationship_cap_per_order": 6.0,

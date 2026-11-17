@@ -397,7 +397,7 @@ func _sell_now() -> void:
 		return
 	var earned := sim.sell_surplus_now()
 	Sfx.play("sale")
-	b._say("The wholesaler took the surplus for %s (about 80%% of normal profit)." % NumFmt.money(earned), UiTheme.GREEN)
+	b._say("The wholesaler took the surplus for %s (about 85%% of normal profit)." % NumFmt.money(earned), UiTheme.GREEN)
 	_update_stock()
 
 

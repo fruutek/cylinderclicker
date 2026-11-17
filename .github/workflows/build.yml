@@ -39,6 +39,12 @@ jobs:
       - name: Run contract tests (generation and balance, allocation, dispatch, reputation, deadlines, offline, saves)
         run: godot --headless --path . -s tests/run_contract_tests.gd | tee contract_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" contract_tests.log && grep -q " 0 failed" contract_tests.log
 
+      - name: Run warehouse tests (stock, capacity, SKUs, planner, wholesale, migration, offline)
+        run: godot --headless --path . -s tests/run_stock_tests.gd | tee stock_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" stock_tests.log && grep -q " 0 failed" stock_tests.log
+
+      - name: Run order tests (calls, customers, relationships, partial deliveries, backorders, contracts on stock, sales rep)
+        run: godot --headless --path . -s tests/run_order_tests.gd | tee order_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" order_tests.log && grep -q " 0 failed" order_tests.log
+
       - name: Run save/load/offline flow test
         run: tests/run_save_flow.sh godot
 
@@ -53,6 +59,11 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri >/dev/null
           tests/run_touch_flow.sh godot | tee touch_flow.log
           ! grep -q -E "FAIL|SCRIPT ERROR" touch_flow.log && test "$(grep -c 'PASS' touch_flow.log)" = 2
+
+      - name: Run warehouse economy flow test (old save > migration > telephone orders > lorries > restart > two hours away)
+        run: |
+          tests/run_stock_flow.sh godot | tee stock_flow.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" stock_flow.log && test "$(grep -c 'PASS' stock_flow.log)" = 3
 
       - name: Run trade contracts flow test (old save > orders > dispatch > restart mid-dispatch > two hours away)
         run: |

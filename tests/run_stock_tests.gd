@@ -170,7 +170,7 @@ func test_overflow_wholesale() -> void:
 	c.state.cash = 0.0
 	copper._receive_stock(10.0, 0)
 	check(copper.warehouse.total("CU-IND") == 3, "only what fits is stored (%d)" % copper.warehouse.total("CU-IND"))
-	near(c.state.cash, 7.0 * copper.sku_profit(0) * 0.8, 0.001, "the 7 that did not fit went to the wholesaler at the lower margin")
+	near(c.state.cash, 7.0 * copper.sku_profit(0) * c.sku_catalog.num("wholesale_share", 0.85), 0.001, "the 7 that did not fit went to the wholesaler at the lower margin")
 	check(float(copper.warehouse.overflowed.get("CU-IND", 0)) == 7.0, "the overflow is on record")
 	check(conserved(copper) == "", "nothing was deleted: " + conserved(copper))
 	check(copper.state.cylinders_made == 10.0 and copper.state.cylinders_sold == 7.0, "made 10, sold 7")

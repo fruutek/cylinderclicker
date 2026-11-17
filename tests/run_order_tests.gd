@@ -625,7 +625,7 @@ func _wholesale_cash(c: GameSession) -> float:
 	var n := 0.0
 	var sim := c.factory("copper")
 	for s in sim.skus:
-		n += float(sim.warehouse.wholesaled.get(str(s["id"]), 0)) * sim.sku_profit(sim.sku_index(str(s["id"]))) * 0.8
+		n += float(sim.warehouse.wholesaled.get(str(s["id"]), 0)) * sim.sku_profit(sim.sku_index(str(s["id"]))) * sim.sku_catalog.num("wholesale_share", 0.85)
 	return n
 
 
