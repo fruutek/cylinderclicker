@@ -18,6 +18,7 @@ var factories: Dictionary = {}            # factory id -> FactoryState
 var current_factory: String = ""          # the factory the player is looking at
 var tutorial_step: int = 0
 var last_saved_unix: float = 0.0
+var contracts: Dictionary = {}            # trade contracts, reputation and history (see ContractBook.to_dict)
 var settings: Dictionary = {"sfx_volume": 0.8, "music_volume": 0.4, "fullscreen": false}
 
 
@@ -45,6 +46,7 @@ func to_dict() -> Dictionary:
 		"current_factory": current_factory,
 		"tutorial_step": tutorial_step,
 		"last_saved_unix": last_saved_unix,
+		"contracts": contracts.duplicate(true),
 		"settings": settings.duplicate(),
 	}
 
@@ -68,6 +70,8 @@ func from_dict(d: Dictionary) -> void:
 	current_factory = str(d.get("current_factory", ""))
 	tutorial_step = int(d.get("tutorial_step", 0))
 	last_saved_unix = float(d.get("last_saved_unix", 0.0))
+	var saved_contracts: Variant = d.get("contracts", {})
+	contracts = saved_contracts.duplicate(true) if typeof(saved_contracts) == TYPE_DICTIONARY else {}
 	var s: Variant = d.get("settings", {})
 	if typeof(s) == TYPE_DICTIONARY:
 		for k: String in s:

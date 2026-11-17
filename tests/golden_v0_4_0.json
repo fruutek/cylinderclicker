@@ -1,0 +1,25 @@
+{
+ "cash": 22737971.378490847,
+ "factories": {
+  "copper": {
+   "cylinders_made": 254034.3707646886,
+   "earned": 21743249.264890894,
+   "levels": "{\"conveyor\":5,\"finish\":11,\"hand_tools\":18,\"lean\":5,\"machine_cut\":37,\"machine_foam\":33,\"machine_pack\":35,\"machine_roll\":34,\"machine_test\":32,\"machine_weld\":31,\"whistle\":6}",
+   "profit_each": 85.16100448255996,
+   "steady_rate": 31.17603640624999,
+   "unlocked": true
+  },
+  "stainless": {
+   "cylinders_made": 2118.0,
+   "earned": 4236000.0,
+   "levels": "{\"machine_case\":7,\"machine_coil\":5,\"machine_form\":7,\"machine_laser\":9,\"machine_prep\":11,\"machine_qa\":6,\"machine_ship\":9,\"machine_tig\":4,\"servo_belts\":1,\"torque_tools\":5}",
+   "profit_each": 2000.0,
+   "steady_rate": 0.25,
+   "unlocked": true
+  }
+ },
+ "lifetime_earned": 25406688.378490914,
+ "offline_cash": 22715835.193186786,
+ "offline_cylinders": 226267.0,
+ "total_clicks": 3165
+}

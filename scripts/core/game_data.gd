@@ -7,10 +7,12 @@ extends RefCounted
 
 const FACTORIES_PATH := "res://data/factories.json"
 const PRODUCTS_PATH := "res://data/products.json"
+const CONTRACTS_PATH := "res://data/contracts.json"
 
 var factories: Array[FactoryDef] = []
 var factory_by_id: Dictionary = {}
 var products: Dictionary = {}
+var contracts: Dictionary = {}        # trade contract rules (ranks, tiers, customers)
 
 
 static func load_json(path: String) -> Dictionary:
@@ -27,6 +29,7 @@ static func load_json(path: String) -> Dictionary:
 
 func load_all() -> bool:
 	products = load_json(PRODUCTS_PATH)
+	contracts = load_json(CONTRACTS_PATH)     # optional: without it the game simply has no contracts
 	var raw := load_json(FACTORIES_PATH)
 	if products.is_empty() or raw.is_empty():
 		return false

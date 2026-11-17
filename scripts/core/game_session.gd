@@ -12,14 +12,22 @@ var data: GameData
 var state: GameState
 var catalog: ProductCatalog
 var factories: Array[FactorySim] = []
+var contract_rules: ContractRules
+var contracts: ContractBook          # trade contracts, reputation and dispatch
 var _by_id: Dictionary = {}
 
 
 func _init(p_data: GameData) -> void:
 	data = p_data
 	catalog = ProductCatalog.new(data.products)
+	contract_rules = ContractRules.new(data.contracts)
+	contracts = ContractBook.new(contract_rules)
+	contracts.market = Callable(self, "_contract_market")
+	contracts.completed.connect(_on_contract_completed)
+	contracts.failed.connect(_on_contract_failed)
 	for def in data.factories:
 		var sim := FactorySim.new(def, catalog)
+		sim.contracts = contracts
 		factories.append(sim)
 		_by_id[def.id] = sim
 	new_game()
@@ -27,12 +35,14 @@ func _init(p_data: GameData) -> void:
 
 func new_game() -> void:
 	state = GameState.new()
+	contracts.reset()
 	_bind_factories()
 
 
 func load_state(d: Dictionary) -> void:
 	state = GameState.new()
 	state.from_dict(d)
+	contracts.from_dict(state.contracts)
 	_bind_factories()
 
 
@@ -68,6 +78,7 @@ func _mark_products_unlocked(def: FactoryDef) -> void:
 func save_data() -> Dictionary:
 	for sim in factories:
 		sim.snapshot()
+	state.contracts = contracts.to_dict()
 	return state.to_dict()
 
 
@@ -102,6 +113,7 @@ func tick(dt: float) -> void:
 	for sim in factories:
 		if sim.state.unlocked:
 			sim.tick(dt)
+	contracts.tick(dt)       # after the factories, so a contract finished this tick beats its deadline
 
 
 ## Hands-free earnings per second across the whole company.
@@ -118,7 +130,7 @@ func recent_income_per_second() -> float:
 	var total := 0.0
 	for sim in factories:
 		if sim.state.unlocked:
-			total += sim.recent_rate_per_min() / 60.0 * sim.profit_per_cylinder()
+			total += sim.recent_income_per_second()
 	return total
 
 
@@ -174,6 +186,9 @@ func unlock_factory(id: String) -> bool:
 ## Credits every fully automated factory for time spent away.
 ## Returns {} if nothing was earned, else a summary with a per-factory list.
 func apply_offline(elapsed_seconds: float) -> Dictionary:
+	if elapsed_seconds < FactorySim.OFFLINE_MIN_SECONDS:
+		return {}
+	contracts.offline_begin()        # lorries that were loading have long since left
 	var parts: Array = []
 	var total_cash := 0.0
 	var total_cylinders := 0.0
@@ -190,9 +205,10 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 		total_cylinders += float(r["cylinders"])
 		capped = capped or bool(r["capped"])
 		counted = maxf(counted, float(r["counted_seconds"]))
-	if parts.is_empty():
+	var trade := contracts.offline_end(counted)
+	if parts.is_empty() and trade.is_empty():
 		return {}
-	return {
+	var summary := {
 		"away_seconds": elapsed_seconds,
 		"counted_seconds": counted,
 		"capped": capped,
@@ -200,3 +216,38 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 		"cash": total_cash,
 		"factories": parts,
 	}
+	if not trade.is_empty():
+		summary["contracts"] = trade
+	return summary
+
+
+# -------------------------------------------------------------- contracts
+## What the contract book needs to know about the company: for each factory it
+## owns, what it makes, what a cylinder nets today and how fast it can really
+## build them. Contracts are sized and priced from this, nothing else.
+func _contract_market() -> Dictionary:
+	var cps := contract_rules.num("planning_clicks_per_second", 1.5)
+	var factor := contract_rules.num("planning_factor", 0.85)
+	var list: Array = []
+	for sim in factories:
+		if sim.state.unlocked:
+			list.append({
+				"id": sim.data.id,
+				"product_name": String(sim.product["name"]),
+				"product_key": sim.data.product_key(),
+				"profit": sim.profit_per_cylinder(),
+				"rate": sim.planning_rate(cps, factor),
+			})
+	return {"earned": state.lifetime_earned, "factories": list}
+
+
+func _on_contract_completed(c: Contract, base: float, bonus: float, _rep: int) -> void:
+	var sim := factory(c.factory)
+	if sim != null:
+		sim.credit_contract_payout(base + bonus)
+
+
+func _on_contract_failed(c: Contract, _reason: String, units: float) -> void:
+	var sim := factory(c.factory)
+	if sim != null and units > 0.0:
+		sim.release_stock(units)

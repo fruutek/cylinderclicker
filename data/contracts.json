@@ -1,0 +1,96 @@
+{
+  "_comment": "Trade contracts. Nothing here names a factory or product: offers are generated for whatever factories the company owns, sized from each factory's real capacity (its 'planning rate') and priced from its current profit per cylinder, so new products and factories work without changes. 'minutes' = minutes of the factory's full planning-rate output an order represents. 'margin' multiplies the factory's current profit per cylinder (1.00 = same as selling normally). 'slack' x the full-rate build time = the deadline, so deadlines are always reachable. 'rep_by_rank' scales reputation by the player's rank so small orders stop paying reputation once outgrown. 'potential' = planning cylinders/min x profit per cylinder (GBP of output per minute) and gates the bigger tiers.",
+  "board": {
+    "unlock_earned": 50,
+    "offer_interval": 75,
+    "premium_lockout": 900,
+    "history_size": 12,
+    "dispatch_base_seconds": 3.2,
+    "dispatch_seconds_per_pallet": 1.2,
+    "free_cancel_seconds": 30,
+    "planning_clicks_per_second": 1.5,
+    "planning_factor": 0.85,
+    "allocation_step": 5,
+    "sales_reserve": 20,
+    "default_allocation": 50,
+    "bonus_rep_mult": 1.25,
+    "penalty_fraction": 0.5,
+    "min_margin": 0.92,
+    "max_margin": 1.5,
+    "premium_margin": 0.10,
+    "premium_rep_mult": 1.5,
+    "premium_slack_mult": 0.85,
+    "premium_size_mult": 1.15,
+    "max_rep_mult": 1.5
+  },
+  "ranks": [
+    {"name": "Unknown Workshop",      "at": 0,    "offers": 3, "slots": 3, "size": 1.0,  "price": 0.0,  "premium": 0.0,
+     "mix": {"trade": 1.0},
+     "perk": "Small trade orders from local installers."},
+    {"name": "Local Supplier",        "at": 20,   "offers": 4, "slots": 3, "size": 1.1,  "price": 0.01, "premium": 0.0,
+     "mix": {"trade": 0.55, "commercial": 0.45},
+     "perk": "Commercial contracts open up."},
+    {"name": "Trusted Trade Name",    "at": 80,   "offers": 5, "slots": 3, "size": 1.2,  "price": 0.02, "premium": 0.12,
+     "mix": {"trade": 0.3, "commercial": 0.7},
+     "perk": "Better prices. Premium customers start calling."},
+    {"name": "Regional Manufacturer", "at": 220,  "offers": 6, "slots": 3, "size": 1.35, "price": 0.03, "premium": 0.16,
+     "mix": {"trade": 0.2, "commercial": 0.5, "major": 0.3},
+     "perk": "Major supply agreements become available."},
+    {"name": "Preferred Supplier",    "at": 500,  "offers": 6, "slots": 4, "size": 1.5,  "price": 0.04, "premium": 0.2,
+     "mix": {"trade": 0.1, "commercial": 0.4, "major": 0.5},
+     "perk": "A fourth contract at once. Bigger orders, better prices."},
+    {"name": "Industry Name",         "at": 1000, "offers": 6, "slots": 4, "size": 1.7,  "price": 0.05, "premium": 0.25,
+     "mix": {"trade": 0.1, "commercial": 0.35, "major": 0.55},
+     "perk": "The best customers in the trade."}
+  ],
+  "tiers": {
+    "trade": {
+      "name": "Small Trade Order", "tag": "TRADE", "min_rank": 0, "min_potential": 0.0,
+      "minutes": [0.6, 1.5], "min_quantity": 5, "margin": [1.08, 1.22],
+      "deadline_chance": 0.5, "slack": [5.0, 8.0], "min_deadline": 240,
+      "bonus_chance": 0.5, "bonus": [0.03, 0.08], "rep": [3, 5],
+      "rep_by_rank": [1.0, 0.8, 0.5, 0.25, 0.0, 0.0], "pallets": [1, 2], "lifetime": 900
+    },
+    "commercial": {
+      "name": "Commercial Contract", "tag": "COMMERCIAL", "min_rank": 1, "min_potential": 300.0,
+      "minutes": [2.0, 5.0], "min_quantity": 20, "margin": [1.12, 1.26],
+      "deadline_chance": 1.0, "slack": [3.2, 4.2], "min_deadline": 900,
+      "bonus_chance": 1.0, "bonus": [0.05, 0.10], "rep": [10, 18],
+      "rep_by_rank": [1.0, 1.0, 1.0, 1.0, 0.5, 0.25], "pallets": [2, 3], "lifetime": 1500
+    },
+    "major": {
+      "name": "Major Supply Agreement", "tag": "MAJOR", "min_rank": 3, "min_potential": 4000.0,
+      "minutes": [6.0, 14.0], "min_quantity": 100, "margin": [1.25, 1.42],
+      "deadline_chance": 1.0, "slack": [2.6, 3.4], "min_deadline": 3600,
+      "bonus_chance": 1.0, "bonus": [0.08, 0.14], "rep": [40, 70],
+      "rep_by_rank": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "pallets": [3, 4], "lifetime": 2400
+    }
+  },
+  "archetypes": [
+    {"id": "installer", "label": "Installer", "tiers": ["trade", "commercial"], "weight": 3.0,
+     "price": [0.0, 0.06], "size": 0.8, "rep": 1.0,
+     "names": ["{surname} Heating & Plumbing", "{surname} & Sons Plumbing", "{place} Heating Services", "{surname} Installations"]},
+    {"id": "plumbing_supplier", "label": "Plumbing Supplier", "tiers": ["trade", "commercial"], "weight": 3.0,
+     "price": [0.02, 0.08], "size": 1.0, "rep": 1.0,
+     "names": ["{place} Plumbing Supplies", "{surname} Plumbing Merchants", "{place} Trade Counter", "{surname} Pipe & Fitting"]},
+    {"id": "merchant", "label": "Builders' Merchant", "tiers": ["trade", "commercial", "major"], "weight": 3.0,
+     "price": [-0.02, 0.05], "size": 1.0, "rep": 1.0,
+     "names": ["{surname} Builders' Merchants", "{place} Building Supplies", "{place} Builders' Merchants", "{surname} Timber & Building"]},
+    {"id": "wholesaler", "label": "Wholesaler", "tiers": ["commercial", "major"], "weight": 2.0,
+     "price": [-0.22, -0.14], "size": 1.3, "rep": 1.5,
+     "names": ["{place} Heating Wholesale", "{surname} Plumbing Wholesale", "{place} Trade Wholesalers", "National {surname} Wholesale"]},
+    {"id": "developer", "label": "Developer", "tiers": ["commercial", "major"], "weight": 2.5,
+     "price": [0.0, 0.08], "size": 1.2, "rep": 1.1,
+     "names": ["{place} Homes", "{surname} Developments", "{place} Construction", "{surname} Estates"]},
+    {"id": "housing_group", "label": "Housing Association", "tiers": ["major"], "weight": 2.0,
+     "price": [-0.06, 0.02], "size": 1.5, "rep": 1.3,
+     "names": ["{place} Housing Association", "{place} Housing Group", "{place} Council Homes"]}
+  ],
+  "names": {
+    "places": ["Northgate", "Redbrook", "Larkfield", "Kestrel", "Pennine", "Thornbury", "Highfield", "Ashdown", "Merrow", "Calder",
+               "Wexcombe", "Brindley", "Harlow", "Oakhurst", "Fenwick", "Stoneleigh", "Marlow", "Cranmere", "Ridgeway", "Hollins",
+               "Elmbridge", "Severn", "Tamworth", "Wyndham"],
+    "surnames": ["Hartley", "Carter", "Whitlock", "Bennett", "Ainsworth", "Pritchard", "Dalton", "Holroyd", "Fairbank", "Thornley",
+                 "Maddox", "Selby", "Garrity", "Pemberton", "Ashworth", "Lockwood", "Darnell", "Kershaw", "Tolliver", "Quigley"]
+  }
+}

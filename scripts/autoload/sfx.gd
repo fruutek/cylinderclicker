@@ -11,9 +11,13 @@ const SOUNDS := {
 	"fanfare": preload("res://assets/audio/fanfare.wav"),
 	"thunk": preload("res://assets/audio/thunk.wav"),
 	"blip": preload("res://assets/audio/blip.wav"),
+	"beep": preload("res://assets/audio/beep.wav"),
+	"ding": preload("res://assets/audio/ding.wav"),
+	"engine": preload("res://assets/audio/engine.wav"),
+	"stamp": preload("res://assets/audio/stamp.wav"),
 }
 const MUSIC := preload("res://assets/audio/music.ogg")
-const MIN_INTERVAL := {"click": 0.04, "sale": 0.12, "thunk": 0.1}
+const MIN_INTERVAL := {"click": 0.04, "sale": 0.12, "thunk": 0.1, "beep": 0.5, "engine": 0.5}
 const POOL_SIZE := 10
 
 var _players: Array[AudioStreamPlayer] = []

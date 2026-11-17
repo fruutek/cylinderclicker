@@ -35,6 +35,7 @@ var _token_layer: Node2D
 var _overlay_layer: Node2D
 var _fx_layer: Node2D
 var _van: Sprite2D
+var _yard: DispatchYard
 var _fronts: Array[Sprite2D] = []
 var _workers: Array[Sprite2D] = []
 var _cabinets: Array[Sprite2D] = []
@@ -98,6 +99,12 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 	_van.centered = false
 	_van.position = _van_pos
 	add_child(_van)
+
+	# Customer orders: the pallet pad below the bay and the delivery lorry. It sits
+	# just above the standing van and below the cylinders on the belts.
+	_yard = DispatchYard.new()
+	add_child(_yard)
+	_yard.setup(session, self, _van_pos)
 
 	_token_layer = _make_layer(_draw_tokens)
 
@@ -179,7 +186,7 @@ func _process(delta: float) -> void:
 		_beacons[i].frame = (int(_time * 3.0 + i) % 2) if working else 0
 
 	_van_bob = maxf(_van_bob - delta, 0.0)
-	_van.position = _van_pos + Vector2(0, 1 if _van_bob > 0.08 else 0)
+	_van.position = _van_pos + Vector2(_yard.van_dx(), 1 if _van_bob > 0.08 else 0)
 
 	_pending_timer -= delta
 	if _pending_cash > 0.0 and _pending_timer <= 0.0:
@@ -342,6 +349,11 @@ func _draw_fx() -> void:
 		var oc := UiTheme.OUTLINE
 		oc.a = fade
 		UiTheme.draw_text(_fx_layer, (f["pos"] as Vector2).round(), f["text"], c, true, oc)
+
+
+## A short rising message at `at` (local coordinates).
+func add_float_text(at: Vector2, text: String, color: Color, life: float = 1.4) -> void:
+	_float_texts.append({"pos": at, "text": text, "age": 0.0, "life": life, "color": color})
 
 
 func burst(at: Vector2, count: int, color: Color, speed: float = 60.0, gravity: float = 160.0, life: float = 0.4) -> void:

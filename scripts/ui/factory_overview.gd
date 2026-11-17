@@ -105,9 +105,12 @@ func _refresh() -> void:
 			var n := sim.automated_count()
 			var total := sim.data.stations.size()
 			body.text = "Earning %s/sec\nOutput %s/min\nCylinders made: %s\nAutomation: %s" % [
-				NumFmt.money(sim.recent_rate_per_min() / 60.0 * sim.profit_per_cylinder()),
+				NumFmt.money(sim.recent_income_per_second()),
 				NumFmt.number(sim.recent_rate_per_min(), 1), NumFmt.number(sim.state.cylinders_made),
 				"fully automated" if n == total else "%d of %d stations" % [n, total]]
+			var orders := company.contracts.for_factory(sim.data.id)
+			if not orders.is_empty():
+				body.text += "\nOrders: %d  (%d%% of output)" % [orders.size(), company.contracts.committed_share(sim.data.id)]
 			button.text = "You are here" if here else "Enter factory"
 			button.disabled = here
 		else:

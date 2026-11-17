@@ -292,6 +292,9 @@ func _phase_play() -> void:
 	await _wait(1.0)
 	await _shot("t10_copper_again")
 
+	# --- trade contracts, entirely by touch
+	await _touch_contracts(c, main)
+
 	# --- pause menu via the Back button
 	Game.back_pressed.emit()
 	await _wait(0.3)
@@ -337,6 +340,105 @@ func _phase_play() -> void:
 	# --- leave it in the background and "kill" the app (phase 2 reopens it later)
 	Game.notification(NOTIFICATION_APPLICATION_PAUSED)
 	print("EXPECT cash=%.2f offline=%.2f" % [c.state.cash, want])
+
+
+## Customer contracts with real touch input: open the board, accept, change the
+## production share, wait for the order to fill, dispatch it and see it paid.
+func _touch_contracts(c: GameSession, main: Node) -> void:
+	var copper := c.factory("copper")
+	check(c.contracts.unlocked, "customers are calling by now")
+	c.contracts.offers.clear()
+	for i in 3:
+		var o := Contract.new()
+		o.id = "t%d" % i
+		o.serial = 600 + i
+		o.tier = "trade"
+		o.customer = ["Tap Test Plumbing", "Thumb Heating", "Finger Installations"][i]
+		o.archetype = "installer"
+		o.factory = "copper"
+		o.product_name = "Copper Cylinder"
+		o.quantity = 200 + i * 50
+		o.unit_ref = 8.0
+		o.value = 3000.0 + i * 500.0
+		o.deadline = 3000.0
+		o.bonus = 200.0
+		o.bonus_by = 1800.0
+		o.est_full = 100.0
+		o.rep = 5
+		o.penalty = 2
+		o.pallets = 2
+		o.expires_in = 900.0
+		c.contracts.offers.append(o)
+	await _tap_button("ORDERS")
+	var board: ContractBoard = null
+	for d in (main.get("_dialog_layer") as Node).get_children():
+		if d is ContractBoard:
+			board = d
+	check(board != null, "tapping ORDERS opens the Contract Board")
+	if board == null:
+		return
+	await _wait(0.3)
+	var panel: Control = board.get("_panel")
+	var inset: Vector2 = main.get("_insets")
+	var safe := Rect2(Vector2(inset.x, 0), Vector2(_vp().x - inset.x - inset.y, _vp().y))
+	check(safe.grow(0.5).encloses(panel.get_global_rect()), "the board fits the screen inside the safe area (%s in %s)" % [panel.get_global_rect(), safe])
+	var too_small: Array[String] = []
+	for b in _all_buttons(board):
+		if b.is_visible_in_tree() and (b.size.y < 27.0 or b.size.x < 26.0):
+			too_small.append("%s (%s)" % [b.text, b.size])
+	check(too_small.is_empty(), "every board button is finger-sized: " + str(too_small))
+	await _shot("t11_contract_board")
+	await _tap_button("ACCEPT")
+	check(c.contracts.active.size() == 1, "tapping ACCEPT takes the order")
+	var k: Contract = c.contracts.active[0]
+	var start := k.allocation
+	await _tap_button("-")
+	check(k.allocation == start - 10, "tapping - lowers the production share (%d -> %d)" % [start, k.allocation])
+	await _tap_button("+")
+	check(k.allocation == start, "tapping + raises it")
+	await _tap_button("ALL")
+	check(k.allocation == 100, "tapping ALL commits the whole factory")
+	var too_small2: Array[String] = []
+	for b in _all_buttons(board):
+		if b.is_visible_in_tree() and (b.size.y < 27.0 or b.size.x < 26.0):
+			too_small2.append("%s (%s)" % [b.text, b.size])
+	check(too_small2.is_empty(), "the active page's buttons are finger-sized too: " + str(too_small2))
+	await _shot("t12_contract_active")
+	await _tap_button("X")
+	check((main.get("_dialog_layer") as Node).get_child_count() == 0, "the X button closes the board")
+	# fill it
+	var guard := 0
+	while k.status == Contract.Status.ACTIVE and guard < 200:
+		for i in 300:
+			c.tick(1.0 / 60.0)
+		guard += 1
+		await get_tree().process_frame
+	check(k.status == Contract.Status.READY and absf(k.delivered - float(k.quantity)) < 1e-6, "the order filled to its quantity")
+	await _tap_button("ORDERS")
+	check(_find_button("DISPATCH") != null and _on_screen(_find_button("DISPATCH")), "a DISPATCH button is on screen for the finished order")
+	await _shot("t13_contract_ready")
+	var cash := c.state.cash
+	var paid := {"n": 0}
+	c.contracts.completed.connect(func(_k: Contract, _b: float, _bo: float, _r: int) -> void: paid["n"] += 1)
+	await _tap_button("DISPATCH")
+	check(k.status == Contract.Status.DISPATCHING, "tapping DISPATCH sends the lorry")
+	await _wait(3.2)
+	await _shot("t14_dispatch")
+	var waited := 0.0
+	while c.contracts.find(k.id) != null and waited < 12.0:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	check(paid["n"] == 1 and c.state.cash > cash, "the lorry left and the order was paid once")
+	await _wait(0.5)
+
+
+func _all_buttons(root: Node) -> Array[Button]:
+	var out: Array[Button] = []
+	for ch in root.get_children():
+		if ch is Button:
+			out.append(ch)
+		out.append_array(_all_buttons(ch))
+	return out
 
 
 func _phase_killed_in_background() -> void:

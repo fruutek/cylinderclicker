@@ -69,6 +69,15 @@ func load_from(entry: Dictionary, p_index: int) -> bool:
 	return true
 
 
+## Identifies the product this factory makes (material/range/variants), so
+## contracts can ask for a product rather than a particular building.
+func product_key() -> String:
+	var parts: Array = [str(product_spec.get("material", "")), str(product_spec.get("range", ""))]
+	for v: Variant in product_spec.get("variants", []):
+		parts.append(str(v))
+	return "/".join(parts)
+
+
 func starts_unlocked() -> bool:
 	return unlock.is_empty()
 

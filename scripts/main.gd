@@ -23,6 +23,7 @@ var _dialog_layer: Control
 var _pause_dialog: ModalDialog
 var _save_toast: Label
 var _toast_time := 0.0
+var _board_unlocked_at := -10000     # msec when the contract board opened (to hush the opening batch of offers)
 
 
 func _enter_tree() -> void:
@@ -59,6 +60,7 @@ func _ready() -> void:
 	_hud.setup(company)
 	_hud.settings_pressed.connect(open_pause_menu)
 	_hud.factories_pressed.connect(open_factory_overview)
+	_hud.orders_pressed.connect(open_contract_board)
 
 	# The tutorial teaches the starting factory, so it lives there.
 	_tutorial = Tutorial.new()
@@ -84,6 +86,12 @@ func _ready() -> void:
 	# Save feedback sits above everything, so it is readable over the pause menu.
 	_save_toast = UiTheme.label("", UiTheme.CREAM)
 	_save_toast.position = Vector2(6, Hud.HEIGHT + 4)
+	# A dark backing keeps toasts readable over the light factory wall.
+	var toast_bg := UiTheme.flat(Color(0.17, 0.12, 0.17, 0.9), UiTheme.WOOD_DARK, 1, 1)
+	toast_bg.content_margin_left = 4
+	toast_bg.content_margin_right = 4
+	_save_toast.add_theme_stylebox_override("normal", toast_bg)
+	_save_toast.visible = false
 	add_child(_save_toast)
 	for node: Node in [_factory_area, _shop_holder, _hud, _tutorial]:
 		node.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -92,6 +100,13 @@ func _ready() -> void:
 	for sim in company.factories:
 		sim.shipped.connect(_on_factory_shipped.bind(sim))
 		sim.station_finished.connect(_on_factory_station_finished.bind(sim))
+	_connect_contracts()
+	if company.contracts.unlocked:
+		# Orders that arrived before this scene was built (loading a save) still count as new.
+		_hud.unseen_offers = company.contracts.offers.size()
+		var used: int = int(company.contracts.stats["completed"]) + int(company.contracts.stats["failed"])
+		if used == 0 and company.contracts.active.is_empty() and not company.contracts.offers.is_empty():
+			_toast(("Customers are sending in orders! Tap ORDERS." if UiTheme.touch else "Customers are sending in orders! Open ORDERS (C)."), UiTheme.GOLD, 6.0)
 	Game.saved.connect(_toast.bind("Game saved", UiTheme.CREAM))
 	Game.save_failed.connect(_toast.bind("SAVE FAILED - could not write the save file", Color("ff8a70")))
 
@@ -187,8 +202,8 @@ func switch_factory(id: String) -> bool:
 	return true
 
 
-func _on_factory_shipped(_count: float, _amount: float, sim: FactorySim) -> void:
-	if sim == session:
+func _on_factory_shipped(_count: float, amount: float, sim: FactorySim) -> void:
+	if sim == session and amount > 0.0:      # cylinders built for a contract earn nothing until dispatched
 		Sfx.play("sale", 0.06, -4.0)
 
 
@@ -203,6 +218,7 @@ func _process(delta: float) -> void:
 		_save_toast.modulate.a = clampf(_toast_time, 0.0, 1.0)
 		if _toast_time <= 0.0:
 			_save_toast.text = ""
+			_save_toast.visible = false
 	# A phone can be flipped to the other landscape direction, which moves
 	# the camera cutout to the other side without changing the screen size.
 	_inset_timer -= delta
@@ -225,11 +241,15 @@ func _process(delta: float) -> void:
 				Sfx.play("buy")
 
 
-func _toast(text: String, color: Color) -> void:
+func _toast(text: String, color: Color, seconds: float = 2.5) -> void:
+	if _is_board_open():
+		return        # the board shows the same news itself, and the toast would cover its title
 	_save_toast.text = text
+	_save_toast.visible = true
+	_save_toast.reset_size()
 	_save_toast.add_theme_color_override("font_color", color)
 	_save_toast.modulate.a = 1.0
-	_toast_time = 2.5
+	_toast_time = seconds
 
 
 # ------------------------------------------------------------------ input
@@ -270,6 +290,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F:
 			if not modal_open:
 				open_factory_overview()
+		KEY_C:
+			if not modal_open and company.contracts.unlocked:
+				open_contract_board()
 		KEY_1, KEY_2, KEY_3:
 			if not modal_open:
 				_shop.show_tab(event.keycode - KEY_1, true)
@@ -302,22 +325,153 @@ func _show_intro() -> void:
 
 
 func _show_offline(summary: Dictionary) -> void:
-	var d := ModalDialog.new("WELCOME BACK!", 280)
+	var trade: Dictionary = summary.get("contracts", {})
+	var d := ModalDialog.new("WELCOME BACK!", 330 if not trade.is_empty() else 280)
 	d.esc_closes = false
-	d.add_text("You were away for %s. Your machines kept the line running." % NumFmt.duration(summary["away_seconds"]))
+	var built := float(summary["cylinders"]) > 0.0
+	d.add_text("You were away for %s.%s" % [NumFmt.duration(summary["away_seconds"]), " Your machines kept the line running." if built else ""])
 	var parts: Array = summary.get("factories", [])
 	if parts.size() > 1:
 		var lines := ""
 		for part: Dictionary in parts:
 			lines += "%s:  %s cylinders,  %s\n" % [part["name"], NumFmt.number(part["cylinders"]), NumFmt.money(part["cash"])]
 		d.add_text(lines.strip_edges(), UiTheme.INK_SOFT)
-	d.add_text("Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
+	if built:
+		d.add_text("Cylinders built:  %s\nSold for:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])] if not trade.is_empty() else "Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
 	if summary["capped"]:
 		d.add_text("(The factory runs unattended for up to %s.)" % NumFmt.duration(summary["counted_seconds"]), UiTheme.INK_SOFT)
+	if not trade.is_empty():
+		_add_contract_summary(d, trade)
 	d.add_button("Lovely!", func() -> void: Sfx.play("sale"))
 	_open(d)
 	if company.state.tutorial_step == 0:
 		company.state.tutorial_step = 1
+
+
+## The contract part of the welcome-back box: what was built for each order,
+## what is ready to dispatch, what was missed, and who called while you were away.
+func _add_contract_summary(d: ModalDialog, trade: Dictionary) -> void:
+	var rule := ColorRect.new()
+	rule.color = UiTheme.WOOD_LIGHT
+	rule.custom_minimum_size = Vector2(0, 1)
+	d.add_control(rule)
+	d.add_text("CONTRACTS", UiTheme.COPPER.darkened(0.3))
+	var shown := 0
+	var more := 0
+	var add := func(text: String, color: Color) -> void:
+		if shown >= 7:
+			more += 1
+			return
+		shown += 1
+		d.add_text(text, color)
+	for p: Dictionary in trade.get("paid", []):
+		add.call("Lorry left for %s:  +%s" % [p["customer"], NumFmt.money(p["amount"])], UiTheme.GREEN)
+	for name: String in trade.get("ready", []):
+		add.call("READY TO DISPATCH:  %s" % name, Color("a9760a"))
+	for f: Dictionary in trade.get("failed", []):
+		add.call("MISSED:  %s - deadline passed. The %s cylinders built were sold." % [f["customer"], NumFmt.number(f["units"])], UiTheme.RED)
+	for p: Dictionary in trade.get("progress", []):
+		var left := ""
+		if float(p["time_left"]) >= 0.0:
+			left = "  (%s left)" % NumFmt.duration(p["time_left"])
+		add.call("%s:  %s / %s  (+%s)%s" % [p["customer"], NumFmt.number(p["delivered"]), NumFmt.number(p["quantity"]), NumFmt.number(p["added"]), left], UiTheme.INK)
+	if more > 0:
+		d.add_text("...and %d more." % more, UiTheme.INK_SOFT)
+	if int(trade.get("new_offers", 0)) > 0:
+		d.add_text("%d new customer orders are waiting on the board." % int(trade["new_offers"]), UiTheme.INK_SOFT)
+	if trade.get("ready", []).size() > 0 or int(trade.get("new_offers", 0)) > 0:
+		_hud.unseen_offers += int(trade.get("new_offers", 0))
+
+
+# ------------------------------------------------------------- contracts
+func _connect_contracts() -> void:
+	# Method callables (not lambdas): the contract book lives in Game.session and outlives this
+	# scene, and Godot drops a method connection as soon as this node is freed.
+	var book := company.contracts
+	book.board_unlocked.connect(_on_board_unlocked)
+	book.offer_added.connect(_on_offer_added)
+	book.ready.connect(_on_contract_ready)
+	book.completed.connect(_on_contract_completed)
+	book.failed.connect(_on_contract_failed)
+	book.rank_changed.connect(_on_rank_changed)
+
+
+func _on_board_unlocked() -> void:
+	_board_unlocked_at = Time.get_ticks_msec()
+	_toast(("A customer has sent in an order! Tap ORDERS." if UiTheme.touch else "A customer has sent in an order! Open ORDERS (C)."), UiTheme.GOLD, 6.0)
+	Sfx.play("buy")
+
+
+func _on_offer_added(o: Contract) -> void:
+	if _is_board_open():
+		return
+	_hud.unseen_offers += 1
+	if Time.get_ticks_msec() - _board_unlocked_at > 1500:
+		_toast("New %s from %s" % [str(company.contract_rules.tier(o.tier).get("name", "order")).to_lower(), o.customer], UiTheme.CREAM, 3.0)
+
+
+func _on_contract_ready(c: Contract) -> void:
+	_toast("Order ready for %s! Send the lorry from ORDERS." % c.customer, UiTheme.GOLD, 6.0)
+	Sfx.play("buy")
+
+
+func _on_contract_completed(c: Contract, base: float, bonus: float, rep_gain: int) -> void:
+	Sfx.play("ding")
+	var text := "Delivered to %s: +%s" % [c.customer, NumFmt.money(base + bonus)]
+	if rep_gain > 0:
+		text += "  (+%d reputation)" % rep_gain
+	_toast(text, UiTheme.GOLD, 5.0)
+
+
+func _on_contract_failed(c: Contract, reason: String, units: float) -> void:
+	if reason == "cancelled":
+		return
+	Sfx.play("deny")
+	_toast("%s: %s. %s cylinders sold, reputation -%d." % [c.customer, "deadline missed" if reason == "deadline" else "order given up", NumFmt.number(units), c.penalty], Color("ff8a70"), 6.0)
+
+
+func _on_rank_changed(index: int, rank_name: String) -> void:
+	_show_rank_up.call_deferred(index, rank_name)
+
+
+func _is_board_open() -> bool:
+	for c in _dialog_layer.get_children():
+		if c is ContractBoard:
+			return true
+	return false
+
+
+func open_contract_board(tab: int = -1) -> void:
+	if _dialog_layer.get_child_count() > 0:
+		return
+	Sfx.play("blip")
+	_hud.unseen_offers = 0
+	_toast_time = 0.01       # clear any lingering toast
+	var board := ContractBoard.new(company, tab)
+	board.dispatched.connect(_on_dispatched)
+	_open(board)
+
+
+## The player sent a lorry: close the board and go to the factory it is loading at.
+func _on_dispatched(id: String) -> void:
+	var c := company.contracts.find(id)
+	if c != null and c.factory != company.state.current_factory:
+		switch_factory(c.factory)
+
+
+func _show_rank_up(index: int, rank_name: String) -> void:
+	var rules := company.contract_rules
+	var rank := rules.rank(index)
+	Sfx.play("fanfare")
+	_flash.color.a = 0.5
+	var d := ModalDialog.new("NEW REPUTATION RANK!", 290)
+	d.esc_closes = false
+	d.add_text(rank_name.to_upper(), UiTheme.COPPER.darkened(0.3)).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	d.add_text(str(rank.get("perk", "")), UiTheme.GREEN)
+	d.add_text("Orders on the board: %d    Contracts at once: %d" % [int(rank["offers"]), int(rank["slots"])], UiTheme.INK_SOFT)
+	d.add_button("Good news!")
+	var existing := _dialog_layer.get_child_count()
+	_open(d)
 
 
 # ------------------------------------------------------------- pause menu

@@ -102,6 +102,17 @@ func steady_rate() -> float:
 	return 0.0 if r == INF else r
 
 
+## Cylinders per second the line could sustain with the player clicking
+## `clicks_per_second` times a second as well as its machines running. Used to
+## size customer contracts for factories that are not fully automated yet.
+func capacity_rate(clicks_per_second: float) -> float:
+	var r := INF
+	for s in stations:
+		var work_per_second := s.rate + clicks_per_second * (click_power + click_boost * s.rate)
+		r = minf(r, work_per_second / s.work)
+	return 0.0 if r == INF else r
+
+
 ## Index of the slowest automated station (-1 if nothing is automated).
 func bottleneck_index() -> int:
 	var best := -1

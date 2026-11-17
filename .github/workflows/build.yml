@@ -36,6 +36,9 @@ jobs:
       - name: Run logic tests
         run: godot --headless --path . -s tests/run_tests.gd
 
+      - name: Run contract tests (generation and balance, allocation, dispatch, reputation, deadlines, offline, saves)
+        run: godot --headless --path . -s tests/run_contract_tests.gd | tee contract_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" contract_tests.log && grep -q " 0 failed" contract_tests.log
+
       - name: Run save/load/offline flow test
         run: tests/run_save_flow.sh godot
 
@@ -50,6 +53,11 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri >/dev/null
           tests/run_touch_flow.sh godot | tee touch_flow.log
           ! grep -q -E "FAIL|SCRIPT ERROR" touch_flow.log && test "$(grep -c 'PASS' touch_flow.log)" = 2
+
+      - name: Run trade contracts flow test (old save > orders > dispatch > restart mid-dispatch > two hours away)
+        run: |
+          tests/run_contracts_flow.sh godot | tee contracts_flow.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" contracts_flow.log && test "$(grep -c 'PASS' contracts_flow.log)" = 3
 
       - name: Export Windows build
         run: |
@@ -215,7 +223,7 @@ jobs:
               rm -f dist/*-testkey.apk
               cp "$PRESIGNED" dist/
             else
-              NOTE=$'\n\n**Note:** this APK is signed with a temporary test key. It installs normally, but cannot update a copy signed with the permanent key (see "Android signing" in the README).'
+              NOTE=$'\n\n**Android update note:** this APK is signed with a temporary test key, so Android will not install it over a copy signed with the permanent key (such as 0.4.0). To move across without losing your factory: in the old game open **Transfer Save > Copy save code**, uninstall the old app, install this APK, then **Transfer Save > Paste save code**. Add the signing secrets described in the README to make future APKs update in place.'
             fi
           fi
           ls -la dist

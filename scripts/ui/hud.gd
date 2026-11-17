@@ -5,6 +5,7 @@ extends Control
 
 signal settings_pressed
 signal factories_pressed
+signal orders_pressed
 
 const HEIGHT := 30
 
@@ -12,6 +13,11 @@ var company: GameSession        # cash and income are company-wide
 var session: FactorySim          # the factory currently on screen
 var _factories: Button
 var _factories_style: StyleBoxFlat
+var _orders: Button
+var _orders_style: StyleBoxFlat
+var _badge: Label
+var _stars: Control
+var unseen_offers := 0           # new customer orders the player has not looked at yet (set by the game scene)
 var _blink := 0.0
 var _bg: Panel
 var _shine: ColorRect
@@ -59,20 +65,27 @@ func setup(p_company: GameSession) -> void:
 	_cash = _add_label(Vector2(22, 3), UiTheme.GOLD, 16)
 	_income = _add_label(Vector2(23, 19), UiTheme.CREAM)
 
-	_add_label(Vector2(150, 4), UiTheme.PARCH_DARK).text = "NOW MAKING"
-	_product = _add_label(Vector2(150, 15), UiTheme.CREAM)
-	_add_label(Vector2(264, 4), UiTheme.PARCH_DARK).text = "PROFIT EACH"
-	_profit = _add_label(Vector2(264, 15), Color("9ff0a0"))
+	# Company reputation: five stars under the cash, lit as the rank rises.
+	_stars = RepStars.new()
+	_stars.position = Vector2(106, 19)
+	_stars.size = Vector2(RepStars.WIDTH, 7)
+	_stars.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_stars)
+
+	_add_label(Vector2(142, 4), UiTheme.PARCH_DARK).text = "NOW MAKING"
+	_product = _add_label(Vector2(142, 15), UiTheme.CREAM)
+	_add_label(Vector2(232, 4), UiTheme.PARCH_DARK).text = "PROFIT EACH"
+	_profit = _add_label(Vector2(232, 15), Color("9ff0a0"))
 
 	var cyl := TextureRect.new()
 	cyl.texture = preload("res://assets/sprites/cyl_icon.png")
-	cyl.position = Vector2(336, 9)
+	cyl.position = Vector2(302, 9)
 	cyl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cyl)
-	_add_label(Vector2(350, 4), UiTheme.PARCH_DARK).text = "CYLINDERS MADE"
-	_made = _add_label(Vector2(350, 15), UiTheme.CREAM)
-	_add_label(Vector2(446, 4), UiTheme.PARCH_DARK).text = "OUTPUT"
-	_rate = _add_label(Vector2(446, 15), UiTheme.CREAM)
+	_add_label(Vector2(315, 4), UiTheme.PARCH_DARK).text = "CYLINDERS MADE"
+	_made = _add_label(Vector2(315, 15), UiTheme.CREAM)
+	_add_label(Vector2(404, 4), UiTheme.PARCH_DARK).text = "OUTPUT"
+	_rate = _add_label(Vector2(404, 15), UiTheme.CREAM)
 
 	var gear := Button.new()
 	gear.icon = preload("res://assets/sprites/gear.png")
@@ -104,17 +117,48 @@ func setup(p_company: GameSession) -> void:
 		_factories.add_theme_color_override(c, UiTheme.CREAM)
 	_factories.pressed.connect(func() -> void: factories_pressed.emit())
 	add_child(_factories)
-	_factories.position = Vector2(524, 5)
-	_factories.size = Vector2(84, 20)
+	_factories.position = Vector2(530, 5)
+	_factories.size = Vector2(78, 20)
+
+	# Orders button: opens the Contract Board. Hidden until the first customer calls.
+	_orders = Button.new()
+	_orders.text = "ORDERS"
+	_orders.icon = preload("res://assets/sprites/orders_icon.png")
+	_orders.tooltip_text = "Contract Board (C)"
+	_orders.focus_mode = Control.FOCUS_NONE
+	_orders_style = UiTheme.flat(UiTheme.WOOD_LIGHT, UiTheme.WOOD_DARK, 1, 2)
+	_orders.add_theme_stylebox_override("normal", _orders_style)
+	_orders.add_theme_stylebox_override("hover", gsb_hover)
+	_orders.add_theme_stylebox_override("pressed", _orders_style)
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		_orders.add_theme_color_override(c, UiTheme.CREAM)
+	_orders.pressed.connect(func() -> void: orders_pressed.emit())
+	add_child(_orders)
+	_orders.position = Vector2(458, 5)
+	_orders.size = Vector2(68, 20)
+	_orders.visible = false
+	_badge = Label.new()
+	_badge.add_theme_font_size_override("font_size", UiTheme.FONT_SIZE)
+	_badge.add_theme_color_override("font_color", Color.WHITE)
+	var badge_style := UiTheme.flat(Color("c0392b"), UiTheme.OUTLINE, 1, 1)
+	badge_style.content_margin_top = 0
+	badge_style.content_margin_bottom = 0
+	_badge.add_theme_stylebox_override("normal", badge_style)
+	_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_badge.visible = false
+	_orders.add_child(_badge)
 
 	if UiTheme.touch:
 		# Finger-sized buttons.
 		_gear.position = Vector2(606, 2)
 		_gear.size = Vector2(30, 26)
-		_factories.position = Vector2(516, 2)
-		_factories.size = Vector2(86, 26)
+		_factories.position = Vector2(526, 2)
+		_factories.size = Vector2(78, 26)
+		_orders.position = Vector2(456, 2)
+		_orders.size = Vector2(66, 26)
 	# Remember where everything sits on the 640-wide desktop bar.
-	var bounds := [150.0, 264.0, 336.0, 446.0, 500.0]
+	var bounds := [142.0, 232.0, 302.0, 404.0, 450.0]
 	for c in get_children():
 		if c == _bg or c == _shine:
 			continue
@@ -128,6 +172,7 @@ func setup(p_company: GameSession) -> void:
 	_shown_cash = company.state.cash
 	for sim in company.factories:
 		sim.shipped.connect(_on_any_shipped.bind(sim))
+	(_stars as RepStars).book = company.contracts
 
 
 ## Fits the bar to the screen width. At 640 wide with no insets this is
@@ -185,6 +230,21 @@ func _process(delta: float) -> void:
 	_made.text = NumFmt.number(session.state.cylinders_made)
 	_rate.text = "%s/min" % NumFmt.number(per_min, 1)
 
+	# Orders: appears once customers start calling, with a badge for anything waiting for you
+	# (orders ready to dispatch, new offers) and a gold glow when a lorry can be sent.
+	var book := company.contracts
+	_orders.visible = book.unlocked
+	if book.unlocked:
+		var ready := book.count_status(Contract.Status.READY)
+		var waiting := ready + unseen_offers
+		_badge.visible = waiting > 0
+		if waiting > 0:
+			_badge.text = str(mini(waiting, 9)) + ("+" if waiting > 9 else "")
+			_badge.reset_size()
+			_badge.position = Vector2(_orders.size.x - _badge.size.x + 3.0, -3.0)
+		_orders_style.bg_color = UiTheme.GOLD.darkened(0.25) if ready > 0 and int(_blink * 2.5) % 2 == 0 else UiTheme.WOOD_LIGHT
+	_stars.tooltip_text = "Company reputation: %s (%d)" % [book.rank_name(), book.reputation]
+
 	# The Factories button glows when a new factory can be built.
 	_blink += delta
 	var buildable := false
@@ -192,3 +252,20 @@ func _process(delta: float) -> void:
 		if company.can_unlock(sim.data.id):
 			buildable = true
 	_factories_style.bg_color = UiTheme.GOLD.darkened(0.25) if buildable and int(_blink * 2.5) % 2 == 0 else UiTheme.WOOD_LIGHT
+
+
+## Five small stars showing the company's reputation rank at a glance.
+class RepStars extends Control:
+	const WIDTH := 39
+	const TEX := preload("res://assets/sprites/stars.png")
+	var book: ContractBook
+
+	func _process(_delta: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		if book == null:
+			return
+		var lit := book.rank_index()
+		for i in 5:
+			draw_texture_rect_region(TEX, Rect2(i * 8, 0, 7, 7), Rect2(0 if i < lit else 7, 0, 7, 7))

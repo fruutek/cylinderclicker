@@ -23,10 +23,12 @@ var state: FactoryState          # this factory's own persistent state
 var catalog: ProductCatalog
 var layout: LineLayout
 var line: ProductionLine
+var contracts: ContractBook = null   # the company's trade contracts (set by GameSession); null = none
 var stats: Dictionary = {}
 var product: Dictionary = {}
 
-var _buckets: Array[float] = []
+var _buckets: Array[float] = []        # cylinders shipped per second (all of them)
+var _sale_buckets: Array[float] = []   # ...of which sold (the rest went to contracts)
 var _bucket_time := 0.0
 
 
@@ -40,6 +42,8 @@ func _init(p_def: FactoryDef, p_catalog: ProductCatalog) -> void:
 	line.station_finished.connect(_on_line_station_finished)
 	_buckets.resize(RATE_WINDOW)
 	_buckets.fill(0.0)
+	_sale_buckets.resize(RATE_WINDOW)
+	_sale_buckets.fill(0.0)
 	state = FactoryState.new()
 	company = GameState.new()
 
@@ -58,6 +62,7 @@ func bind(p_company: GameState, p_state: FactoryState) -> void:
 				state.upgrade_levels[id] = mini(state.upgrade_levels[id], max_level)
 	line.clear()
 	_buckets.fill(0.0)
+	_sale_buckets.fill(0.0)
 	refresh()
 	if not state.line.is_empty():
 		line.from_dict(state.line)
@@ -126,6 +131,8 @@ func tick(dt: float) -> void:
 		_bucket_time -= 1.0
 		_buckets.pop_front()
 		_buckets.append(0.0)
+		_sale_buckets.pop_front()
+		_sale_buckets.append(0.0)
 	line.tick(dt)
 
 
@@ -164,12 +171,34 @@ func income_per_second() -> float:
 	return steady_rate() * profit_per_cylinder()
 
 
+## Cylinders per second a contract planner can rely on: the hands-free rate once
+## the line is fully automated, otherwise an estimate that includes a player
+## clicking now and then (scaled down, since a click rate is never guaranteed).
+func planning_rate(clicks_per_second: float, click_factor: float) -> float:
+	if all_automated():
+		return steady_rate()
+	return line.capacity_rate(clicks_per_second) * click_factor
+
+
 ## Average cylinders per minute actually shipped over the last few seconds.
 func recent_rate_per_min() -> float:
 	var total := 0.0
 	for b in _buckets:
 		total += b
 	return total / float(RATE_WINDOW) * 60.0
+
+
+## Average cylinders per minute actually sold (shipped minus those built for contracts).
+func recent_sales_per_min() -> float:
+	var total := 0.0
+	for b in _sale_buckets:
+		total += b
+	return total / float(RATE_WINDOW) * 60.0
+
+
+## What the factory is really earning from sales right now, per second.
+func recent_income_per_second() -> float:
+	return recent_sales_per_min() / 60.0 * profit_per_cylinder()
 
 
 func level(id: String) -> int:
@@ -209,12 +238,43 @@ func buy(id: String) -> bool:
 	return true
 
 
+## Every cylinder that leaves the line is either sold or built for a contract,
+## never both: contracts take their share first and only the rest earns sale
+## revenue. With no active contract the whole shipment is sold, exactly as before.
 func _on_line_shipped(count: float) -> void:
-	var amount := count * profit_per_cylinder()
+	var contracted := 0.0
+	if contracts != null:
+		contracted = contracts.route(data.id, count)
+	var sold := count - contracted
+	var amount := sold * profit_per_cylinder()
 	_credit(count, amount)
+	state.cylinders_sold += sold
+	state.cylinders_contracted += contracted
 	_buckets[_buckets.size() - 1] += count
+	_sale_buckets[_sale_buckets.size() - 1] += sold
 	state.best_rate_per_min = maxf(state.best_rate_per_min, recent_rate_per_min())
 	shipped.emit(count, amount)
+
+
+## A customer contract has been paid: add the money to the company and to this
+## factory's earnings (the cylinders themselves were counted when built).
+func credit_contract_payout(amount: float) -> void:
+	company.cash = NumFmt.clamp_value(company.cash + amount)
+	company.lifetime_earned = NumFmt.clamp_value(company.lifetime_earned + amount)
+	state.earned = NumFmt.clamp_value(state.earned + amount)
+	cash_changed.emit()
+
+
+## A contract failed or was cancelled: the cylinders already built for it go
+## back to general stock and are sold at today's price, so nothing is wasted.
+func release_stock(units: float) -> float:
+	if units <= 0.0:
+		return 0.0
+	var amount := units * profit_per_cylinder()
+	state.cylinders_contracted -= units      # may dip below zero for a moment during an offline catch-up
+	state.cylinders_sold += units
+	credit_contract_payout(amount)
+	return amount
 
 
 func _on_line_station_finished(index: int) -> void:
@@ -242,10 +302,19 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 	var cap := float(stats.get("offline_hours", 8.0)) * 3600.0
 	var counted := minf(elapsed_seconds, cap)
 	var cylinders := floorf(rate * counted)
+	# Contracts take their share of the unattended output first (stepping through
+	# completions and deadlines); the rest is sold as it always was.
+	var contracted := 0.0
+	if contracts != null:
+		contracted = contracts.offline_factory(data.id, rate, counted)
+	cylinders = maxf(cylinders, contracted)
 	if cylinders < 1.0:
 		return {}
-	var amount := cylinders * profit_per_cylinder()
+	var sold := cylinders - contracted
+	var amount := sold * profit_per_cylinder()
 	_credit(cylinders, amount)
+	state.cylinders_sold += sold
+	state.cylinders_contracted += contracted
 	return {
 		"factory": data.id,
 		"name": data.name,
@@ -253,5 +322,6 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 		"counted_seconds": counted,
 		"capped": elapsed_seconds > cap,
 		"cylinders": cylinders,
+		"contracted": contracted,
 		"cash": amount,
 	}

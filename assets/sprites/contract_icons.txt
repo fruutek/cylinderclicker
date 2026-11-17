@@ -1,0 +1,8 @@
+clipboard
+lorry
+factory
+clock
+pallet
+tick
+cross
+alert
