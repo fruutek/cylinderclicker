@@ -502,6 +502,17 @@ func next_upgrade() -> String:
 			if level(id) == 0 and is_visible(id) and cost(id) < cheapest:
 				cheapest = cost(id)
 				machine = id
+	if machine != "" and not can_afford(machine):
+		# While the machine is still out of reach, a cheap boost you can buy right now is the better next step.
+		var cheap := ""
+		for u: Dictionary in data.upgrades:
+			var cid := str(u["id"])
+			if bool(u.get("stock", false)) or not is_visible(cid) or is_maxed(cid) or not can_afford(cid):
+				continue
+			if cost(cid) <= cost(machine) * 0.5 and (cheap == "" or cost(cid) < cost(cheap)):
+				cheap = cid
+		if cheap != "":
+			return cheap
 	if machine != "":
 		return machine
 	var pick := ""

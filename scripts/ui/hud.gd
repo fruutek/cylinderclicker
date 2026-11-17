@@ -17,6 +17,7 @@ var _orders: Button
 var _orders_style: StyleBoxFlat
 var _badge: Label
 var _stars: Control
+var simple := false              # phone-first bar: money and what is being made, nothing else
 var unseen_offers := 0           # new customer orders the player has not looked at yet (set by the game scene)
 var _badge_shown := -1
 var _rep_shown := -1
@@ -194,6 +195,17 @@ func layout(total_width: float, inset_left: float, inset_right: float) -> void:
 			node.position.x = float(item[1]) + inset_left + floorf(extra * group / 5.0)
 
 
+## The phone-first bar: cash, what is being made, the factory switcher and the menu. Statistics, the orders
+## button and the reputation stars move to the screens behind the four destinations.
+func simplify() -> void:
+	simple = true
+	for item: Array in _groups:
+		if int(item[2]) in [2, 3, 4]:
+			(item[0] as Control).visible = false
+	_stars.visible = false
+	_orders.visible = false
+
+
 ## Points the factory part of the bar at a different factory.
 func set_factory(sim: FactorySim) -> void:
 	session = sim
@@ -240,7 +252,7 @@ func _process(delta: float) -> void:
 	# (orders ready to dispatch, new offers) and a gold glow when a lorry can be sent.
 	var book := company.contracts
 	var calls := company.sales.calls.size() if company.state.stock_mode else 0
-	_orders.visible = book.unlocked or (company.state.stock_mode and company.sales.unlocked)
+	_orders.visible = (book.unlocked or (company.state.stock_mode and company.sales.unlocked)) and not simple
 	if _orders.visible:
 		var ready := book.count_status(Contract.Status.READY) + (1 if calls > 0 else 0)
 		var waiting := ready - (1 if calls > 0 else 0) + unseen_offers + calls

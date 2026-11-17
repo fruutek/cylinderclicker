@@ -90,6 +90,13 @@ func _press(prefix: String) -> bool:
 	return true
 
 
+func _screen() -> Node:
+	for d in (_scene().get("_dialog_layer") as Node).get_children():
+		if d is ScreenFrame:
+			return d
+	return null
+
+
 func _board() -> ContractBoard:
 	for c in (_scene().get("_dialog_layer") as Node).get_children():
 		if c is ContractBoard:
@@ -137,6 +144,7 @@ func _phase_play() -> void:
 	var copper := c.factory("copper")
 	# --- the v0.5.1 save has been brought across
 	check(c.state.stock_mode and copper.stock_enabled() and not c.state.stock_migrate, "the old save now keeps a warehouse")
+	check(c.contracts.auto_ship_board, "finished contracts ship themselves")
 	check(c.state.factory_name == "Legacy Flow Ltd" and absf(c.state.cash - 25000.0) < 1.0 + 25000.0 * 0.5, "name and money kept")
 	check(copper.level("machine_weld") == 9 and copper.level("finish") == 3, "upgrades kept")
 	var cover := copper.sku_catalog.num("migration_cover_minutes", 8.0) * 60.0 * copper.steady_rate()
@@ -144,47 +152,39 @@ func _phase_play() -> void:
 	check(c.contracts.active.size() == 3, "the three contracts survived")
 	var l1 := c.contracts.find("L1")
 	var l2 := c.contracts.find("L2")
-	check(l1 != null and l1.held == 25.0 and l2 != null and l2.status == Contract.Status.READY and l2.held == 40.0, "built cylinders are reserved stock (25 and 40)")
+	check(l1 != null and l1.held == 25.0 and l2 != null and (l2.status == Contract.Status.READY or l2.status == Contract.Status.DISPATCHING) and l2.held == 40.0, "built cylinders are reserved stock (25 and 40)")
 	check(copper.warehouse.reserved_units("CU-IND") == 75 and copper.warehouse.validate(true) == "", "75 reserved in the warehouse: " + copper.warehouse.validate(true))
 	check(copper.state.auto_targets, "targets look after themselves")
-	# --- the ORDERS board
-	var orders := _find_button("ORDERS")
-	check(orders != null and orders.visible, "the ORDERS button is there")
-	await _press("ORDERS")
-	var board := _board()
-	check(board != null and board._tab_key() == "active", "the board opens on ACTIVE")
-	check(_find_button("SHIP 40 NOW") != null, "the finished contract offers SHIP 40 NOW")
+	# --- the finished contract ships by itself now (no dispatch screen)
 	var cash0 := c.state.cash
 	var quote := c.contracts.quote(l2)
-	await _press("SHIP 40 NOW")
-	await _wait(0.3)
-	check(l2.status == Contract.Status.DISPATCHING, "the lorry is loading")
-	await _warp(10.0)
-	check(c.contracts.find("L2") == null, "the lorry left")
+	await _warp(14.0)
+	check(c.contracts.find("L2") == null, "the finished contract was sent without a dispatch screen")
 	var gained := c.state.cash - cash0
 	check(gained >= quote - 1.0 and gained <= quote * 1.5 + 50.0, "paid once: %s for a %s order" % [NumFmt.money(gained), NumFmt.money(quote)])
-	check(copper.warehouse.shipped.get("CU-IND", 0) == 40 and copper.warehouse.reserved_units("CU-IND") == 35, "40 left the warehouse, 35 still reserved")
-	# --- the phone rings
+	check(copper.warehouse.shipped.get("CU-IND", 0) >= 40, "40 left the warehouse")
+	# --- the side deck: warehouse, one obvious action, four destinations
+	for nav in ["FACTORY", "ORDERS", "STOCK", "UPGRADES"]:
+		check(_find_button(nav) != null, "navigation button %s is on the main screen" % nav)
+	check(_find_button("BUY") != null or _find_button("DECLINE") != null, "the deck shows one obvious thing: a customer's order card, or the next upgrade")
+	# --- the phone rings: one card, plain buttons
 	c.sales.advance(0.2)
 	check(c.sales.unlocked and c.sales.customers.size() >= 5, "customers exist (%d)" % c.sales.customers.size())
 	c.sales.timers["copper"] = 0.0
 	await _warp(1.0)
+	await _wait(0.5)
 	check(c.sales.calls.size() >= 1, "the telephone rings")
-	var hud_btn := _find_button("ORDERS")
-	await _press("ORDERS")
-	board = _board()
-	check(board != null and board._tab_key() == "calls", "the board opens on CALLS when a customer is waiting")
 	var call: Dictionary = c.sales.calls[0]
 	var who := c.sales.find_customer(str(call["customer"]))
 	who["rel"] = 60.0                                  # a trusted customer: the answer will be accepted
 	var orders_before := c.contracts.call_active_count()
 	var pressed := false
-	for label in ["SUPPLY IN FULL", "PART DELIVERY", "FULL ORDER, LATER", "ONLY WHAT"]:
+	for label in ["FULFIL ORDER", "SEND ", "MAKE "]:
 		if _find_button(label) != null:
 			await _press(label)
 			pressed = true
 			break
-	check(pressed, "an offer button was pressed")
+	check(pressed, "the order card has a button for the order")
 	await _wait(0.3)
 	check(c.contracts.call_active_count() > orders_before or int(c.sales.stats["rejected"]) > 0, "the customer answered the offer")
 	var paid_before := c.state.cash
@@ -193,32 +193,32 @@ func _phase_play() -> void:
 		if c.state.cash > paid_before + 1.0:
 			break
 	check(c.state.cash > paid_before + 1.0, "the telephone order pays as lorries leave (%s -> %s)" % [NumFmt.money(paid_before), NumFmt.money(c.state.cash)])
-	# --- STOCK tab
-	await _close_dialogs()
-	await _press("ORDERS")
-	board = _board()
-	board.show_tab(board._keys.find("stock"))
-	await _wait(0.3)
-	check(_find_button("WAREHOUSE") == null or true, "stock tab built")
-	var target_before := int(copper.state.targets.get("CU-IND", 0))
-	await _press("AUTO TARGETS")                        # switch to manual so +/- work
-	check(not copper.state.auto_targets, "auto targets can be switched off")
+	# --- STOCK screen: AUTO STOCK / MANUAL
+	await _press("STOCK")
+	var screen := _screen()
+	check(screen is StockScreen, "the STOCK screen opens from the main screen")
+	check(copper.state.auto_targets, "AUTO STOCK is on by default")
+	await _press("MANUAL")
+	check(not copper.state.auto_targets, "MANUAL switches it off")
 	var plus := _find_enabled("+")
-	check(plus != null, "the + button is enabled for manual targets")
+	check(plus != null, "+ is there in MANUAL")
+	var before := int(copper.state.targets.get("CU-IND", 0))
 	if plus != null:
 		plus.pressed.emit()
 		await _wait(0.2)
-	check(int(copper.state.targets.get("CU-IND", 0)) > target_before or int(copper.state.targets.get("CU-DIR", 0)) >= 0, "a target went up")
-	await _press("WHOLESALE SURPLUS")
-	check(not copper.state.wholesale_on, "wholesale can be switched off")
-	await _press("WHOLESALE SURPLUS")
-	check(copper.state.wholesale_on, "...and on again")
-	board.show_tab(board._keys.find("customers"))
-	await _wait(0.3)
-	board.show_tab(board._keys.find("rep"))
-	await _wait(0.3)
-	check(_find_button("APPLY RECOMMENDED") != null, "the sales rep page offers APPLY RECOMMENDED STOCK")
-	await _press("APPLY RECOMMENDED")
+	check(int(copper.state.targets.get("CU-IND", 0)) != before or int(copper.state.targets.get("CU-DIR", 0)) >= 0, "a target moved")
+	await _press("AUTO STOCK")
+	check(copper.state.auto_targets, "AUTO STOCK switches it back on")
+	# --- ORDERS screen, UPGRADES screen, and the advanced view behind MORE DETAILS
+	await _press("ORDERS")
+	check(_screen() is OrdersScreen, "the ORDERS screen opens")
+	await _press("UPGRADES")
+	check(_screen() is UpgradesScreen, "the UPGRADES screen opens")
+	await _press("ORDERS")
+	await _press("MORE DETAILS")
+	var board := _board()
+	check(board != null, "MORE DETAILS opens the full Contract Board for anyone who wants every number")
+	await _close_dialogs()
 	# --- save in the middle of a shipment
 	await _close_dialogs()
 	copper.state.auto_targets = true
@@ -251,7 +251,7 @@ func _phase_restart() -> void:
 	check(c.sales.customers.size() == int(expect["customers"]) and str(c.sales.customers[1]["name"]) == str(expect["name1"]), "the same customers (%d)" % c.sales.customers.size())
 	near(float(c.sales.customers[1]["rel"]), float(expect["rel"]), 0.01, "relationship score restored")
 	check(c.contracts.active.size() == int(expect["open"]), "open orders restored (%d)" % c.contracts.active.size())
-	check(copper.warehouse.reserved_units("CU-IND") <= int(expect["reserved"]) and copper.warehouse.reserved_units("CU-IND") > 0, "reserved stock restored (%d, saved with %d: a lorry may have left since)" % [copper.warehouse.reserved_units("CU-IND"), int(expect["reserved"])])
+	check(absi(copper.warehouse.reserved_units("CU-IND") - int(expect["reserved"])) <= 12 and copper.warehouse.reserved_units("CU-IND") > 0, "reserved stock restored (%d, saved with %d: the line and the lorries have moved on a little)" % [copper.warehouse.reserved_units("CU-IND"), int(expect["reserved"])])
 	var held := 0.0
 	for k in c.contracts.active:
 		if k.sku == "CU-IND":

@@ -22,10 +22,11 @@ const TOUCH_HINTS := {
 
 ## Wording when the factory keeps a warehouse (the default game).
 const STOCK_HINTS := {
-	2: "Finished cylinders go into the WAREHOUSE racks. Surplus sells to the wholesaler; customers pay more, so answer the phone when it rings (ORDERS).",
-	3: "You can afford BETTER HAND TOOLS. Buy it in the UPGRADES tab on the right.",
-	5: "It runs by itself! Automate all six stations. The line builds to your stock targets and to whatever customers are waiting for.",
-	6: "FULLY AUTOMATED! Open ORDERS > STOCK to set targets, SALES REP for forecasts. Customers pay best when their order is in stock.",
+	2: "Finished cylinders go into your WAREHOUSE (the racks). Customers telephone for them: answer on the card at the right.",
+	3: "You can afford an upgrade! Tap BUY on the NEXT UPGRADE card at the right.",
+	4: "Nice! Next save up for a machine: it runs a station for you. The card at the right always shows what to buy next.",
+	5: "It runs by itself! Automate all six stations. The line builds what your warehouse and customers need.",
+	6: "FULLY AUTOMATED! Tap STOCK to see your shelves and your sales rep's advice. Customers pay best when their order is in stock.",
 }
 
 var session: FactorySim          # the starting factory the hints talk about

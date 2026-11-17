@@ -9,6 +9,8 @@ var _factory: FactoryView
 var _factory_area: Control
 var _hud: Hud
 var _shop: ShopPanel
+var _rel_note := ""
+var _deck: SideDeck             # the phone-first strip beside the factory (warehouse game)
 var _shop_holder: Control
 var _tip_layer: Control
 var _flash: ColorRect
@@ -61,6 +63,8 @@ func _ready() -> void:
 	_hud.settings_pressed.connect(open_pause_menu)
 	_hud.factories_pressed.connect(open_factory_overview)
 	_hud.orders_pressed.connect(open_contract_board)
+	if company.state.stock_mode:
+		_hud.simplify()
 
 	# The tutorial teaches the starting factory, so it lives there.
 	_tutorial = Tutorial.new()
@@ -142,12 +146,24 @@ func _show_factory(sim: FactorySim) -> void:
 		_factory.queue_free()
 	if is_instance_valid(_shop):
 		_shop.queue_free()
+	if is_instance_valid(_deck):
+		_deck.queue_free()
+	_shop = null
+	_deck = null
 	_factory = FactoryView.new()
 	_factory_area.add_child(_factory)
 	_factory.setup(sim, company.state)
-	_shop = ShopPanel.new()
-	_shop_holder.add_child(_shop)
-	_shop.setup(sim, company.state, _tip_layer, _shop_size.x, _shop_size.y)
+	if _simple_ui():
+		_deck = SideDeck.new()
+		_shop_holder.add_child(_deck)
+		_deck.setup(sim, company, _shop_size.x, _shop_size.y)
+		_deck.navigate.connect(open_screen)
+		_deck.message.connect(_toast.bind(2.5))
+		_deck.call_answered.connect(_on_call_answered)
+	else:
+		_shop = ShopPanel.new()
+		_shop_holder.add_child(_shop)
+		_shop.setup(sim, company.state, _tip_layer, _shop_size.x, _shop_size.y)
 	_hud.set_factory(sim)
 
 
@@ -242,6 +258,10 @@ func _process(delta: float) -> void:
 
 
 func _toast(text: String, color: Color, seconds: float = 2.5) -> void:
+	for c in _dialog_layer.get_children():
+		if c is ScreenFrame:
+			(c as ScreenFrame).say(text, color, seconds + 1.5)      # a screen is open: its own message line shows it
+			return
 	if _is_board_open():
 		return        # the board shows the same news itself, and the toast would cover its title
 	_save_toast.text = text
@@ -292,10 +312,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				open_factory_overview()
 		KEY_C:
 			if not modal_open and (company.contracts.unlocked or (company.state.stock_mode and company.sales.unlocked)):
-				open_contract_board()
+				if _simple_ui():
+					open_screen("orders")
+				else:
+					open_contract_board()
 		KEY_1, KEY_2, KEY_3:
-			if not modal_open:
+			if not modal_open and _shop != null:
 				_shop.show_tab(event.keycode - KEY_1, true)
+			elif not modal_open and _simple_ui():
+				open_screen(["orders", "stock", "upgrades"][event.keycode - KEY_1])
 	get_viewport().set_input_as_handled()
 
 
@@ -313,6 +338,54 @@ func _on_back() -> void:
 # ---------------------------------------------------------------- dialogs
 func _open(d: ModalDialog) -> void:
 	_dialog_layer.add_child(d)
+
+
+## The phone-first interface is used whenever the factory keeps a warehouse (the default game).
+func _simple_ui() -> bool:
+	return company.state.stock_mode and session.stock_enabled()
+
+
+## FACTORY | ORDERS | STOCK | UPGRADES. Opening one closes whichever screen was open.
+func open_screen(key: String) -> void:
+	for c in _dialog_layer.get_children():
+		if c is ScreenFrame:
+			c.queue_free()
+		else:
+			return                       # some other dialog is on top (pause, welcome back...): leave it
+	if key == "factory":
+		return
+	var screen: ScreenFrame
+	match key:
+		"orders":
+			screen = OrdersScreen.new(company)
+			(screen as OrdersScreen).order_answered.connect(_on_call_answered)
+			_hud.unseen_offers = 0
+		"stock":
+			screen = StockScreen.new(company)
+		"upgrades":
+			screen = UpgradesScreen.new(company)
+		_:
+			return
+	Sfx.play("blip")
+	screen.navigate.connect(open_screen)
+	screen.details_requested.connect(_open_details)
+	_toast_time = 0.01
+	_open(screen)
+
+
+## The advanced view (the full Contract Board) for anyone who wants every number.
+func _open_details(tab: String) -> void:
+	for c in _dialog_layer.get_children():
+		c.queue_free()
+	var board := ContractBoard.new(company, -1, tab if tab != "" else "offers")
+	board.dispatched.connect(_on_dispatched)
+	_open(board)
+
+
+func _on_call_answered(result: Dictionary, option: String) -> void:
+	var accepted := bool(result.get("accepted", false))
+	Sfx.play("ding" if accepted else ("blip" if option == "decline" else "deny"))
+	_toast(str(result.get("text", "")), UiTheme.GOLD if accepted else UiTheme.CREAM, 3.5)
 
 
 func _show_intro() -> void:
@@ -405,6 +478,7 @@ func _connect_contracts() -> void:
 	book.shipment_left.connect(_on_shipment_left)
 	book.order_ended.connect(_on_order_ended)
 	company.sales.call_arrived.connect(_on_call_arrived)
+	company.sales.relationship_moved.connect(_on_relationship_moved)
 
 
 func _on_board_unlocked() -> void:
@@ -414,7 +488,7 @@ func _on_board_unlocked() -> void:
 
 
 func _on_offer_added(o: Contract) -> void:
-	if _is_board_open():
+	if _is_board_open() or _simple_ui():
 		return
 	_hud.unseen_offers += 1
 	if Time.get_ticks_msec() - _board_unlocked_at > 1500:
@@ -450,25 +524,49 @@ func _on_call_arrived(call: Dictionary) -> void:
 		Sfx.play("ring", 0.0, -8.0)
 		return
 	Sfx.play("ring", 0.0, -4.0)
+	if _simple_ui():
+		return                           # the customer is already on the side deck, with the buttons
 	var cust := company.sales.find_customer(str(call["customer"]))
 	_toast("The phone is ringing: %s. Tap ORDERS." % str(cust.get("name", "a customer")) if UiTheme.touch else "The phone is ringing: %s. Open ORDERS (C)." % str(cust.get("name", "a customer")), UiTheme.GOLD, 5.0)
 
 
 ## A warehouse lorry has left: money for the cylinders on it.
 func _on_shipment_left(c: Contract, units: float, amount: float) -> void:
+	if _simple_ui():
+		Sfx.play("sale")
+		return
 	if c.shipped < float(c.quantity) - ContractBook.EPS:        # the last lorry has its own "delivered" message
 		Sfx.play("sale")
 		_toast("Lorry to %s: %s cylinders, +%s" % [c.customer, NumFmt.number(units), NumFmt.money(amount)], UiTheme.GOLD, 4.0)
 
 
 func _on_order_ended(c: Contract, outcome: String) -> void:
+	var note := _rel_note
+	_rel_note = ""
 	match outcome:
 		"complete", "late_complete":
 			Sfx.play("ding")
-			_toast("Order complete for %s: %s paid in total." % [c.customer, NumFmt.money(c.paid_total)], UiTheme.GOLD, 5.0)
+			var line := "Delivered to %s: %s paid" % [c.customer, NumFmt.money(c.paid_total)]
+			if note != "":
+				line += "  -  " + note
+			_toast(line, UiTheme.GOLD, 5.0)
 		_:
 			Sfx.play("deny")
-			_toast("%s gave up waiting. The rest of the order is cancelled." % c.customer, Color("ff8a70"), 6.0)
+			_toast("%s gave up waiting! %s" % [c.customer, note], Color("ff8a70"), 6.0)
+
+
+## How a customer feels about how it went, in a few words. Order results add it to their message;
+## everything else (turning a customer down) says it straight away.
+func _on_relationship_moved(_id: String, customer_name: String, delta: float, reason: String) -> void:
+	match reason:
+		"happy":
+			_rel_note = "Customer happy! +%d relationship" % maxi(1, roundi(delta))
+		"late":
+			_rel_note = "Delivery late! Customer unhappy."
+		"gave_up":
+			_rel_note = "Relationship %d" % roundi(delta)
+		"declined":
+			_toast("%s is disappointed (%d)" % [customer_name, roundi(delta)], Color("ffb08a"), 3.0)
 
 
 func _on_rank_changed(index: int, rank_name: String) -> void:

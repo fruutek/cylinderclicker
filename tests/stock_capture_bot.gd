@@ -18,7 +18,7 @@ func _ready() -> void:
 	var c: GameSession = Game.session
 	Game.save_enabled = false
 	c.state.tutorial_step = 7
-	c.state.cash = 5000.0
+	c.state.cash = 320.0
 	c.state.lifetime_earned = 20000.0
 	var s := c.factory("copper")
 	for m: Dictionary in s.data.machines:
@@ -51,41 +51,37 @@ func _ready() -> void:
 	_call(c, "CU-DIR", 24, 1)
 	_call(c, "CU-HOR", 6, 3)
 	_plan = [
-		[1.0, func() -> void: _close_dialogs(); _shot("s01_factory")],
-		[5.0, func() -> void: _board("calls")],
-		[5.8, func() -> void: _shot("s02_calls")],
-		[6.0, func() -> void:
-			var call: Dictionary = c.sales.calls[0]
-			c.sales.customers[0]["rel"] = 80.0
-			print(c.sales.answer(str(call["id"]), "full"))
-			var call2: Dictionary = c.sales.calls[0]
-			print(c.sales.answer(str(call2["id"]), "partial"))],
-		[6.5, func() -> void: _board("active")],
-		[7.3, func() -> void: _shot("s03_active")],
-		[7.5, func() -> void: _board("stock")],
-		[8.3, func() -> void: _shot("s04_stock")],
-		[8.5, func() -> void: _board("customers")],
-		[9.3, func() -> void: _shot("s05_customers")],
-		[9.5, func() -> void: _board("rep")],
-		[10.3, func() -> void: _shot("s06_rep")],
-		[10.5, func() -> void: _close_dialogs(); main.call("switch_factory", "copper")],
-		[11.1, func() -> void: _shot("s07_factory_after")],
-		[11.3, func() -> void:
-			c.factory("copper").warehouse.receive("CU-IND", 60.0)
-			c.factory("copper").warehouse.receive("CU-DIR", 20.0)],
-		[12.1, func() -> void: _shot("s08_factory_full")],
-		[12.6, func() -> void:
-			var st := c.factory("stainless")
-			st.state.unlocked = true
-			for m in st.data.machines:
-				st.state.upgrade_levels[m["id"]] = 3
-			st.state.upgrade_levels["warehouse"] = 1
-			st.refresh()
-			st.warehouse.receive("ST-IND", 9.0)
-			st.warehouse.receive("ST-DIR", 5.0)
-			main.call("switch_factory", "stainless")],
-		[14.2, func() -> void: _shot("s09_stainless_stock")],
-		[14.6, func() -> void: get_tree().quit()],
+		[1.0, func() -> void: _close_dialogs(); _shot("n01_factory_idle")],
+		[1.5, func() -> void:
+			c.sales.calls.clear()
+			_call(c, "CU-DIR", 24, 1)],
+		[2.2, func() -> void: _shot("n02_factory_call")],
+		[2.5, func() -> void: main.call("open_screen", "orders")],
+		[3.2, func() -> void: _shot("n03_orders_call")],
+		[3.4, func() -> void: main.call("open_screen", "stock")],
+		[4.1, func() -> void: _shot("n04_stock_auto")],
+		[4.3, func() -> void:
+			var f: FactorySim = c.factory("copper")
+			for i in f.skus.size():
+				f.state.targets[f.sku_id(i)] = f.effective_target(i)
+			f.state.auto_targets = false],
+		[5.0, func() -> void: _shot("n05_stock_manual")],
+		[5.2, func() -> void:
+			c.factory("copper").state.auto_targets = true
+			main.call("open_screen", "upgrades")],
+		[5.9, func() -> void: _shot("n06_upgrades")],
+		[6.1, func() -> void:
+			c.sales.calls.clear()
+			var k := Contract.new()
+			k.id = "o1"; k.serial = 1000001; k.tier = "call"; k.customer = "Dalton Heating & Plumbing"; k.customer_id = c.sales.customers[0]["id"]
+			k.factory = "copper"; k.sku = "CU-IND"; k.product_name = "Copper Indirect"; k.quantity = 30; k.asked = 30; k.margin = 1.05; k.mode = "partial"
+			k.shipped = 10.0; k.held = 8.0; k.pallets = 2; k.promised = 400.0; k.deadline = 400.0
+			c.contracts.add_order(k)
+			main.call("open_screen", "orders")],
+		[6.9, func() -> void: _shot("n07_orders_progress")],
+		[7.1, func() -> void: _close_dialogs()],
+		[7.8, func() -> void: _shot("n08_factory_upgrade")],
+		[8.2, func() -> void: get_tree().quit()],
 	]
 
 
