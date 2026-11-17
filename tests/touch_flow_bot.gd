@@ -115,6 +115,17 @@ func _tap_button(prefix: String) -> void:
 	if b == null:
 		check(false, "button '%s' exists" % prefix)
 		return
+	# A person taps what they can see: wait for the button to stop moving (a page that was just
+	# built is laid out a frame or two later - slow devices take a while).
+	var last := Rect2()
+	var still := 0
+	for i in 40:
+		var r := b.get_global_rect()
+		still = still + 1 if r == last else 0
+		last = r
+		if still >= 2:
+			break
+		await get_tree().process_frame
 	await _tap(b.get_global_rect().get_center())
 	await _wait(0.25)
 

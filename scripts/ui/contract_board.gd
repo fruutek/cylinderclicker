@@ -205,7 +205,7 @@ func _make_signature() -> String:
 				sig += o.id + ","
 		1:
 			for c in book.active:
-				sig += "%s:%d:%d," % [c.id, c.status, 1 if c.delivered > 0.0 else 0]
+				sig += "%s:%d," % [c.id, c.status]      # not progress: the bars and numbers update in place
 		_:
 			sig += str(book.history.size())
 	return sig

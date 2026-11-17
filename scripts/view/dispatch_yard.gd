@@ -64,6 +64,8 @@ var _last_t := -1.0
 var _last_id := ""
 var _van_dx := 0.0
 var _featured: Contract = null
+var _pad_key := ""
+var _pad_tex := {}                 # cached pad outline textures: "normal" and "bright"
 
 
 func setup(p_sim: FactorySim, p_view: FactoryView, home: Vector2) -> void:
@@ -74,6 +76,7 @@ func setup(p_sim: FactorySim, p_view: FactoryView, home: Vector2) -> void:
 	_pad = Node2D.new()
 	_pad.draw.connect(_draw_pad)
 	add_child(_pad)
+	_pad_tex = {"normal": _make_pad_texture(Color("c48f2c")), "bright": _make_pad_texture(Color("f2b73c"))}
 	_lorry = Sprite2D.new()
 	_lorry.centered = false
 	_lorry.visible = false
@@ -119,7 +122,39 @@ func _process(delta: float) -> void:
 			_van_dx = lerpf(-PARK_DX, 0.0, _ease_out(k))
 		else:
 			_van_dx = 0.0
-	_pad.queue_redraw()
+	# The pad is only redrawn when what it shows changes (or while the forklift is moving).
+	var key := _state_key(c)
+	if dispatching or key != _pad_key:
+		_pad_key = key
+		_pad.queue_redraw()
+
+
+## Everything the pad's drawing depends on, as a string: equal strings need no redraw.
+func _state_key(c: Contract) -> String:
+	if book == null or not book.unlocked:
+		return "locked"
+	if c == null:
+		return "empty|%d" % int(_flash > 0.0)
+	var blink := int(_time * 3.0) % 2 if c.status == Contract.Status.READY else 0
+	return "%s|%d|%d|%d|%d|%d" % [c.id, c.status, int(ceilf(c.fraction() * float(c.pallets * PALLET_FRAME_BOXES))), blink, int(_bump > 0.0), int(_flash > 0.0)]
+
+
+## The painted outbound area (a faint tint and a dashed outline) as one small texture, so
+## it costs a single draw instead of dozens of rectangles.
+static func _make_pad_texture(line: Color) -> ImageTexture:
+	var w := int(PAD.size.x)
+	var h := int(PAD.size.y)
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.2, 0.15, 0.2, 0.12))
+	for x in w:
+		if x % 8 < 5:
+			img.set_pixel(x, 0, line)
+			img.set_pixel(x, h - 1, line)
+	for y in h:
+		if y % 8 < 5:
+			img.set_pixel(0, y, line)
+			img.set_pixel(w - 1, y, line)
+	return ImageTexture.create_from_image(img)
 
 
 # ------------------------------------------------------------- sequence
@@ -210,22 +245,9 @@ func _draw_pad() -> void:
 		return
 	var c := _featured
 	var ready := c != null and c.status == Contract.Status.READY
-	# painted outbound area
-	var floor_tint := Color(0.2, 0.15, 0.2, 0.12)
-	_pad.draw_rect(PAD, floor_tint)
-	var line_col := Color("f2b73c") if (ready and int(_time * 3.0) % 2 == 0) or _flash > 0.0 else Color("c48f2c")
-	var x := PAD.position.x
-	while x < PAD.end.x:
-		var w := minf(5.0, PAD.end.x - x)
-		_pad.draw_rect(Rect2(x, PAD.position.y, w, 1), line_col)
-		_pad.draw_rect(Rect2(x, PAD.end.y - 1, w, 1), line_col)
-		x += 8.0
-	var y := PAD.position.y
-	while y < PAD.end.y:
-		var h := minf(5.0, PAD.end.y - y)
-		_pad.draw_rect(Rect2(PAD.position.x, y, 1, h), line_col)
-		_pad.draw_rect(Rect2(PAD.end.x - 1, y, 1, h), line_col)
-		y += 8.0
+	# painted outbound area (cached texture)
+	var bright := (ready and int(_time * 3.0) % 2 == 0) or _flash > 0.0
+	_pad.draw_texture(_pad_tex["bright" if bright else "normal"], PAD.position)
 	if c == null:
 		UiTheme.draw_text(_pad, Vector2(PAD.position.x + 5, PAD.position.y + 3), "OUTBOUND", Color(1, 1, 1, 0.35), false, Color(0, 0, 0, 0))
 		return

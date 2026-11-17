@@ -18,6 +18,8 @@ var _orders_style: StyleBoxFlat
 var _badge: Label
 var _stars: Control
 var unseen_offers := 0           # new customer orders the player has not looked at yet (set by the game scene)
+var _badge_shown := -1
+var _rep_shown := -1
 var _blink := 0.0
 var _bg: Panel
 var _shine: ColorRect
@@ -237,13 +239,17 @@ func _process(delta: float) -> void:
 	if book.unlocked:
 		var ready := book.count_status(Contract.Status.READY)
 		var waiting := ready + unseen_offers
-		_badge.visible = waiting > 0
-		if waiting > 0:
-			_badge.text = str(mini(waiting, 9)) + ("+" if waiting > 9 else "")
-			_badge.reset_size()
-			_badge.position = Vector2(_orders.size.x - _badge.size.x + 3.0, -3.0)
+		if waiting != _badge_shown:
+			_badge_shown = waiting
+			_badge.visible = waiting > 0
+			if waiting > 0:
+				_badge.text = str(mini(waiting, 9)) + ("+" if waiting > 9 else "")
+				_badge.reset_size()
+				_badge.position = Vector2(_orders.size.x - _badge.size.x + 3.0, -3.0)
 		_orders_style.bg_color = UiTheme.GOLD.darkened(0.25) if ready > 0 and int(_blink * 2.5) % 2 == 0 else UiTheme.WOOD_LIGHT
-	_stars.tooltip_text = "Company reputation: %s (%d)" % [book.rank_name(), book.reputation]
+	if book.reputation != _rep_shown:
+		_rep_shown = book.reputation
+		_stars.tooltip_text = "Company reputation: %s (%d)" % [book.rank_name(), book.reputation]
 
 	# The Factories button glows when a new factory can be built.
 	_blink += delta
@@ -259,13 +265,16 @@ class RepStars extends Control:
 	const WIDTH := 39
 	const TEX := preload("res://assets/sprites/stars.png")
 	var book: ContractBook
+	var _lit := -1
 
 	func _process(_delta: float) -> void:
-		queue_redraw()
+		if book != null and book.rank_index() != _lit:
+			queue_redraw()
 
 	func _draw() -> void:
 		if book == null:
 			return
 		var lit := book.rank_index()
+		_lit = lit
 		for i in 5:
 			draw_texture_rect_region(TEX, Rect2(i * 8, 0, 7, 7), Rect2(0 if i < lit else 7, 0, 7, 7))

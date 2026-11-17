@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Cylinder Clicker"
 config/description="A cosy pixel-art factory idle game about making British hot water cylinders."
-config/version="0.5.0"
+config/version="0.5.1"
 run/main_scene="res://scenes/menu.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="CylinderClicker"
