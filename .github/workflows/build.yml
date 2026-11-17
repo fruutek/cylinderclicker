@@ -248,5 +248,6 @@ jobs:
           Both versions are the same game built from the same code. To move a save between devices use **Transfer Save** on the main menu.${NOTE}
           NOTES
           sed -i 's/^          //' notes.md
+          if [ -f "releases/notes/${VERSION}.md" ]; then cat "releases/notes/${VERSION}.md" >> notes.md; fi
           gh release create "${{ steps.check.outputs.tag }}" dist/* --target "${{ github.sha }}" \
             --title "Cylinder Clicker ${VERSION}" --notes-file notes.md

@@ -83,7 +83,68 @@ phone's **Back** button or gesture for the pause menu.
 | **Esc** or the gear button | Pause menu (resume, save, settings, rename factory, return to main menu, quit) |
 | **F11** | Toggle fullscreen |
 
+## Warehouse, stock control and customer relationships
+
+![The warehouse racking on the factory floor](docs/screenshot_warehouse.png)
+
+![A customer telephones: part delivery, only what we have, full order later, decline](docs/screenshot_calls.png)
+
+![The stock room: capacity, targets, priorities](docs/screenshot_stock.png)
+
+![The sales rep's forecast](docs/screenshot_sales_rep.png)
+
+Since 0.6.0 a cylinder is no longer sold the moment it is made. The loop is: **manufacture > store in the
+warehouse > customers telephone > fulfil, part-fulfil or refuse > dispatch > earn > grow.**
+
+- **The warehouse.** Every factory has its own stock room with a limited capacity (24 cylinders to start
+  with, 12 at the stainless plant), per-product stock, *reserved* (promised to a customer) and *available*
+  counts, and a visible fill bar. Finished cylinders are built into stock; they only earn money when they
+  leave: on a lorry for a customer, or to the wholesaler. The racking on the factory floor grows with the
+  warehouse (more bays, then stacked tiers), fills with pallets as stock arrives and carries a gold tag on
+  pallets set aside for a customer. **Bigger Warehouse** (+75% per level, each level dearer) is in the shop.
+  When the shelves are full the line stops - or, with *Wholesale surplus* on, a person at the controls may
+  keep building and the surplus is sold to the wholesaler at about 85% of normal profit. Cylinders are never
+  silently deleted: `made = in stock + shipped + wholesaled` is checked by the tests through whole playthroughs.
+- **Products.** Copper and stainless each come in Indirect and Direct, then Horizontal and (copper) Slimline once
+  the specialist tooling is bought (Horizontal Tooling, Slimline Forming Rig, Horizontal Handling Cell). Each
+  has its own price, material and making costs and build time (`data/skus.json`). Premium variants sell for
+  more each but never earn more *per minute of line time* than the standard one, so the best plan is led by demand.
+- **Production planner.** Customers who are waiting come first (earliest promise first), then the product
+  furthest below its **target stock**. Targets follow the sales rep's recommendation (AUTO TARGETS) or are set
+  by hand on the **STOCK** tab, with a priority star, auto-produce and wholesale switches and *sell surplus
+  now*. A person clicking can stockpile beyond the targets. Offline, the same planner runs in half-minute steps.
+- **Telephone orders.** Persistent customers ring for a product and a quantity ("Can you supply 18 Copper
+  Direct?"). Open **ORDERS > CALLS** and choose: *part delivery now and backorder the rest* (you are paid for
+  what ships, the rest is built with priority and shipped in later lorries against a promised date),
+  *only what we have*, *full order, delivered later*, or *decline*. Each offer shows how likely the customer is
+  to accept. Customers differ in patience, how much they mind part deliveries, and price sensitivity.
+  If nobody answers, your sales rep takes the call at a weaker price - which is also what keeps the factory
+  selling while you are away.
+- **Orders are contracts.** A telephone order is an ordinary entry in the Contract Board with a product, ordered /
+  reserved / shipped / outstanding quantities and its own lorries, so there is one order system, one set of
+  reservations and one dispatch (lorry and forklift). Board contracts are filled from stock too and can ship in
+  several lorries (paid per lorry; the bonus and reputation come when the last one has left).
+- **Customers and relationships.** Each customer has a relationship score (New, Known, Regular, Trusted,
+  Partner), order history, total spend, preferences, typical order size, price sensitivity and patience.
+  Trust brings bigger and more frequent orders, a better price (up to about +16%) and more patience. Loyalty
+  grows slowly and its ceiling depends on how many orders you have really completed, so two tiny orders never make
+  a partner. Late or cancelled orders and repeated refusals cost relationship, and a customer who is turned away
+  too often stops ringing for a while. *Company reputation* (the stars) is separate and unchanged.
+- **Sales rep.** The **SALES REP** tab forecasts demand: the likely share of calls for each product you can make,
+  cylinders a minute, a recommended stock level, shortfalls, recent lost sales and stock nobody is buying. It is a
+  likelihood, not a promise, and **Sales Rep Training** makes it follow what customers really ask for.
+  New products rebalance the forecast the moment they unlock.
+- **Old saves.** A v0.5.1 save is brought across automatically (save version 5): upgrades, money, unlocks and
+  factories are untouched; each factory gets a warehouse big enough for its output and automatic targets; cylinders
+  that had been built for an open contract become reserved stock for it, so no progress is lost and nothing is paid
+  twice. `--direct-sales` on the command line keeps the old sell-on-completion rules (the tests that pin them use it).
+- **Balance.** `tests/stock_economy_sim.gd` plays the real game with simulated players (skilled, average, careless,
+  blind) against v0.5.1; see `docs/expansion-4-plan.md` for the numbers. Everything about warehouses is in
+  `data/skus.json`, customers and calls in `data/customers.json`.
+
 ## Trade contracts, customer orders and dispatch
+
+(In the warehouse game, accepting a board contract puts the cylinders on the shelves aside for it and the line builds the rest - there are no output shares; see above. This section describes the v0.5.1 rules, which `--direct-sales` still uses.)
 
 Once the company has made a few sales, customers start sending in orders: installers, plumbing
 suppliers, builders' merchants, wholesalers, developers and housing associations, each with a name,
@@ -224,8 +285,14 @@ tests/            headless tests, a balancing bot and a screenshot bot
   results. Offline earnings use the analytic bottleneck rate.
 - **Saves are versioned.** `SaveManager` upgrades old saves step by step, ignores unknown
   upgrades and refuses saves from a newer version. Version 4 adds the contract book (reputation,
-  offers, accepted contracts with progress, shares and deadlines, history); older saves load with
-  an empty book that fills itself once the company has earned a little.
+  offers, accepted contracts with progress, shares and deadlines, history); version 5 adds the warehouse
+  (per-factory stock, reserved, counters, targets, priorities), the sales office (customers, relationships,
+  waiting calls, forecast history) and the order fields; older saves load and migrate step by step.
+- **Warehouse accounting.** Cash only ever moves by net profit at the moment of sale (price less the product's
+  material and making cost), so production never needs money up front and a player can never be stranded. The
+  `Warehouse` keeps whole-unit stock, reserved and fractional carry; `StockPort` is the contract book's only way
+  to reserve, release or ship it; `SalesOffice` owns customers, calls and the forecast and creates ordinary
+  `Contract`s; `FactorySim` hosts the planner. None of them touch the scene tree.
 
 ## Development
 

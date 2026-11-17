@@ -28,6 +28,9 @@ func _ready() -> void:
 	s.state.earned = 20000.0
 	s.refresh()
 	c.contracts.reset(2024)
+	c.contracts.unlocked = true
+	c.contracts.offer_timer = 1.0e9
+	c.contracts.refresh_board()
 	c.sales.reset(2024)
 	c.sales.advance(0.1)
 	c.sales.timers["copper"] = 1.0e9
@@ -49,29 +52,29 @@ func _ready() -> void:
 	_call(c, "CU-HOR", 6, 3)
 	_plan = [
 		[1.0, func() -> void: _close_dialogs(); _shot("s01_factory")],
-		[1.5, func() -> void: _board("calls")],
-		[2.3, func() -> void: _shot("s02_calls")],
-		[2.5, func() -> void:
+		[5.0, func() -> void: _board("calls")],
+		[5.8, func() -> void: _shot("s02_calls")],
+		[6.0, func() -> void:
 			var call: Dictionary = c.sales.calls[0]
 			c.sales.customers[0]["rel"] = 80.0
 			print(c.sales.answer(str(call["id"]), "full"))
 			var call2: Dictionary = c.sales.calls[0]
 			print(c.sales.answer(str(call2["id"]), "partial"))],
-		[3.0, func() -> void: _board("active")],
-		[3.8, func() -> void: _shot("s03_active")],
-		[4.0, func() -> void: _board("stock")],
-		[4.8, func() -> void: _shot("s04_stock")],
-		[5.0, func() -> void: _board("customers")],
-		[5.8, func() -> void: _shot("s05_customers")],
-		[6.0, func() -> void: _board("rep")],
-		[6.8, func() -> void: _shot("s06_rep")],
-		[7.0, func() -> void: _close_dialogs(); main.call("switch_factory", "copper")],
-		[7.6, func() -> void: _shot("s07_factory_after")],
-		[7.8, func() -> void:
+		[6.5, func() -> void: _board("active")],
+		[7.3, func() -> void: _shot("s03_active")],
+		[7.5, func() -> void: _board("stock")],
+		[8.3, func() -> void: _shot("s04_stock")],
+		[8.5, func() -> void: _board("customers")],
+		[9.3, func() -> void: _shot("s05_customers")],
+		[9.5, func() -> void: _board("rep")],
+		[10.3, func() -> void: _shot("s06_rep")],
+		[10.5, func() -> void: _close_dialogs(); main.call("switch_factory", "copper")],
+		[11.1, func() -> void: _shot("s07_factory_after")],
+		[11.3, func() -> void:
 			c.factory("copper").warehouse.receive("CU-IND", 60.0)
 			c.factory("copper").warehouse.receive("CU-DIR", 20.0)],
-		[8.6, func() -> void: _shot("s08_factory_full")],
-		[9.0, func() -> void: get_tree().quit()],
+		[12.1, func() -> void: _shot("s08_factory_full")],
+		[12.5, func() -> void: get_tree().quit()],
 	]
 
 
