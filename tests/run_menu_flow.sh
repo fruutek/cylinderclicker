@@ -13,7 +13,7 @@ run() {
     xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path . --rendering-driver opengl3 --resolution 1280x720 -- \
       "--save-path=$SAVE" --root-bot=res://tests/menu_flow_bot.gd "--phase=$1" "--capture=$SHOTS" 2>&1
   else
-    "$GODOT" --headless --path . -- --direct-sales "--save-path=$SAVE" --root-bot=res://tests/menu_flow_bot.gd "--phase=$1" 2>&1
+    "$GODOT" --headless --path . -- "--save-path=$SAVE" --root-bot=res://tests/menu_flow_bot.gd "--phase=$1" 2>&1
   fi | grep -E "^  (ok|FAIL)|MENU FLOW|EXPECT|GOT|SCRIPT ERROR" || true
 }
 run 1

@@ -85,11 +85,12 @@ func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node, p_
 		scroll.add_child(page)
 		_pages.append(page)
 
-	_build_rows(_pages[0], session.data.upgrades)
-	_pages[0].custom_minimum_size = Vector2(width - 8, session.data.upgrades.size() * (row_h + 2) + (16 if touch else 0))
+	var offered: Array = session.data.upgrades.filter(func(u: Dictionary) -> bool: return session.is_offered(str(u["id"])))
+	_build_rows(_pages[0], offered)
+	_pages[0].custom_minimum_size = Vector2(width - 8, offered.size() * (row_h + 2) + (16 if touch else 0))
 	if touch:
 		var hint := UiTheme.label("Hold a row for details.", UiTheme.INK_SOFT)
-		hint.position = Vector2(2, session.data.upgrades.size() * (row_h + 2) + 2)
+		hint.position = Vector2(2, offered.size() * (row_h + 2) + 2)
 		_pages[0].add_child(hint)
 	_build_rows(_pages[1], session.data.machines)
 	_footer = UiTheme.label("", UiTheme.INK_SOFT)
@@ -99,6 +100,8 @@ func setup(p_session: FactorySim, p_company: GameState, tooltip_parent: Node, p_
 	_pages[1].add_child(_footer)
 	_pages[1].custom_minimum_size = Vector2(width - 8, session.data.machines.size() * (row_h + 2) + 66)
 	_build_products(_pages[2])
+	if session.variants_enabled():
+		_tab_buttons[2].text = "CYLINDERS"
 	_build_tooltip(tooltip_parent)
 
 	session.upgrade_purchased.connect(func(_id: String, _l: int) -> void: refresh())
@@ -432,6 +435,9 @@ var _product_rows := {}
 
 
 func _build_products(page: Control) -> void:
+	if session.variants_enabled():
+		_build_variants(page)
+		return
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.WOOD_DARK, 1, 4))
 	card.position = Vector2(0, 0)
@@ -499,6 +505,9 @@ func _on_product_tapped(key: String, row: Control) -> void:
 
 
 func _refresh_products() -> void:
+	if session.variants_enabled():
+		_refresh_variants()
+		return
 	if _product_card == null or _current_tab != 2:
 		return
 	if session.stock_enabled():
@@ -527,3 +536,116 @@ func _refresh_products() -> void:
 		(row["status"] as Label).text = "IN PRODUCTION" if unlocked else "LOCKED"
 		(row["status"] as Label).add_theme_color_override("font_color", UiTheme.GREEN if unlocked else UiTheme.INK_SOFT)
 		(row["name"] as Label).add_theme_color_override("font_color", UiTheme.INK if unlocked else UiTheme.INK_SOFT)
+
+
+# ----------------------------------------------------- the cylinder picker (classic game)
+var _variant_rows := {}
+var _variant_note := ""
+var _variant_note_time := 0.0
+
+
+func _build_variants(page: Control) -> void:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.WOOD_DARK, 1, 4))
+	card.position = Vector2(0, 0)
+	card.size = Vector2(width - 8, 56)
+	card.clip_contents = true
+	page.add_child(card)
+	_product_card = UiTheme.label("")
+	card.add_child(_product_card)
+	var y := 60.0
+	for i in session.skus.size():
+		var row := Button.new()
+		row.position = Vector2(0, y)
+		row.size = Vector2(width - 8, row_h)
+		row.focus_mode = Control.FOCUS_NONE
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.add_theme_stylebox_override("normal", UiTheme.flat(UiTheme.PARCH, UiTheme.PARCH_DARK, 1, 1))
+		row.add_theme_stylebox_override("hover", UiTheme.flat(UiTheme.PARCH_LIGHT, UiTheme.COPPER, 1, 1))
+		row.add_theme_stylebox_override("pressed", UiTheme.flat(UiTheme.PARCH, UiTheme.PARCH_DARK, 1, 1))
+		row.button_down.connect(_on_row_down.bind(_variant_unlock_id(i), row))
+		row.button_up.connect(_on_row_up)
+		row.pressed.connect(_on_variant_pressed.bind(i))
+		page.add_child(row)
+		var swatch := ColorRect.new()
+		swatch.color = Color.WHITE.lerp(Color(str(session.skus[i].get("tint", "ffffff"))), 0.9)
+		swatch.size = Vector2(6, row_h - 8)
+		swatch.position = Vector2(4, 4)
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(swatch)
+		var name_label := UiTheme.label("")
+		name_label.position = Vector2(16, int((row_h - 10) / 2.0))
+		name_label.size = Vector2(width - 8 - 16 - 78, 10)
+		name_label.clip_text = true
+		row.add_child(name_label)
+		var status := UiTheme.label("")
+		status.position = Vector2(width - 8 - 76, int((row_h - 10) / 2.0))
+		status.size = Vector2(72, 10)
+		status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(status)
+		_variant_rows[i] = {"name": name_label, "status": status, "swatch": swatch}
+		y += row_h + 2.0
+	page.custom_minimum_size = Vector2(width - 8, y + 6)
+
+
+func _variant_unlock_id(i: int) -> String:
+	var req: Array = session.skus[i].get("requires", [])
+	return str(req[0]["upgrade"]) if not req.is_empty() else ""
+
+
+func _on_variant_pressed(i: int) -> void:
+	if _press_was_not_a_tap():
+		return                       # the list was being scrolled, or the row was held to read about it
+	if session.sku_available(i):
+		if session.select_variant(session.sku_id(i)):
+			Sfx.play("blip")
+			_variant_note = ""
+	else:
+		var up := _variant_unlock_id(i)
+		if up != "" and session.is_visible(up) and session.buy(up):
+			Sfx.play("buy")
+			_variant_note = "NEW PRODUCT! Now making it."
+			_variant_note_time = 3.0
+		else:
+			Sfx.play("deny")
+			_variant_note = ("Need %s more" % NumFmt.money(maxf(session.cost(up) - company.cash, 0.0))) if (up != "" and session.is_visible(up)) else "Keep earning to reveal this one"
+			_variant_note_time = 2.5
+	refresh()
+
+
+func _refresh_variants() -> void:
+	if _product_card == null or _current_tab != 2:
+		return
+	if _variant_note_time > 0.0:
+		_variant_note_time -= 0.25
+		if _variant_note_time <= 0.0:
+			_variant_note = ""
+	var cur := session.variant_index()
+	var w := session.sku_work(cur)
+	_product_card.text = "MAKING: %s\nSells %s   Profit %s\n%s" % [
+		String(session.skus[cur]["name"]).to_upper(), NumFmt.money(session.sale_price()), NumFmt.money(session.profit_per_cylinder()),
+		_variant_note if _variant_note != "" else ("Standard speed" if w <= 1.001 else "Takes %d%% longer to build" % int(roundf((w - 1.0) * 100.0)))]
+	for i: int in _variant_rows:
+		var r: Dictionary = _variant_rows[i]
+		var up := _variant_unlock_id(i)
+		var name_l := r["name"] as Label
+		var st := r["status"] as Label
+		if session.sku_available(i):
+			name_l.text = String(session.skus[i]["name"])
+			var making := i == cur
+			st.text = "MAKING" if making else NumFmt.money(session.sku_profit(i))
+			st.add_theme_color_override("font_color", UiTheme.GREEN if making else UiTheme.INK)
+			name_l.add_theme_color_override("font_color", UiTheme.INK)
+			(r["swatch"] as ColorRect).modulate = Color.WHITE
+		elif up != "" and session.is_visible(up):
+			name_l.text = String(session.skus[i]["name"])
+			st.text = NumFmt.money(session.cost(up))
+			st.add_theme_color_override("font_color", UiTheme.GREEN if session.can_afford(up) else UiTheme.RED)
+			name_l.add_theme_color_override("font_color", UiTheme.INK_SOFT)
+			(r["swatch"] as ColorRect).modulate = Color(1, 1, 1, 0.5)
+		else:
+			name_l.text = "? ? ?"
+			st.text = "Earn %s" % NumFmt.money(float(session.data.upgrade_by_id[up]["unlock_at"])) if up != "" else ""
+			st.add_theme_color_override("font_color", UiTheme.INK_SOFT)
+			name_l.add_theme_color_override("font_color", UiTheme.INK_SOFT)
+			(r["swatch"] as ColorRect).modulate = Color(1, 1, 1, 0.25)

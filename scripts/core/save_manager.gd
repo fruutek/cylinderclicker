@@ -7,7 +7,7 @@ extends RefCounted
 ## * Writes go to a temp file first and the previous save is kept as `.bak`,
 ##   so a crash mid-write cannot destroy progress.
 
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
 const DEFAULT_PATH := "user://savegame.json"
 const GAME_ID := "cylinder_clicker"
 
@@ -136,6 +136,14 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				if not st4.has("sales"):
 					st4["sales"] = {}
 				payload["version"] = 5
+			5:
+				# v6 is the classic game: cylinder variants, the delivery van and bonus orders. The warehouse and the
+				# old contract/customer systems are retired; GameSession converts their leftovers into cash when
+				# the save is loaded (nothing is lost), everything else is untouched.
+				var st5: Variant = payload.get("state", {})
+				if typeof(st5) != TYPE_DICTIONARY:
+					return {}
+				payload["version"] = 6
 			_:
 				return {}
 		version = int(payload.get("version", version + 1))

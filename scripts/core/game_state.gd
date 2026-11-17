@@ -19,6 +19,7 @@ var current_factory: String = ""          # the factory the player is looking at
 var tutorial_step: int = 0
 var last_saved_unix: float = 0.0
 var contracts: Dictionary = {}            # trade contracts, reputation and history (see ContractBook.to_dict)
+var bonus: Dictionary = {}              # the bonus-order state (offer, accepted order, timers)
 var sales: Dictionary = {}                # customers, calls, orders, shipments (see SalesOffice.to_dict)
 var stock_mode := true                    # cylinders go to the warehouse and are sold to customers (false = the v0.5.1 "sell on completion" rules, kept for tests)
 var stock_migrate := false                # set when an older save has just been brought across: grants are applied once
@@ -37,6 +38,16 @@ static func clean_name(raw: String) -> String:
 	return out if not out.is_empty() else DEFAULT_FACTORY_NAME
 
 
+## What the player typed, cleaned and trimmed to the limit; "" when nothing usable was typed.
+static func clean_typed(raw: String) -> String:
+	var out := ""
+	for i in raw.length():
+		var code := raw.unicode_at(i)
+		if code >= 32 and code <= 126:
+			out += raw[i]
+	return out.strip_edges().substr(0, MAX_NAME_LENGTH).strip_edges()
+
+
 func to_dict() -> Dictionary:
 	return {
 		"factory_name": factory_name,
@@ -51,6 +62,7 @@ func to_dict() -> Dictionary:
 		"last_saved_unix": last_saved_unix,
 		"contracts": contracts.duplicate(true),
 		"sales": sales.duplicate(true),
+		"bonus": bonus.duplicate(true),
 		"stock_mode": stock_mode,
 		"stock_migrate": stock_migrate,
 		"settings": settings.duplicate(),
@@ -78,6 +90,8 @@ func from_dict(d: Dictionary) -> void:
 	last_saved_unix = float(d.get("last_saved_unix", 0.0))
 	var saved_contracts: Variant = d.get("contracts", {})
 	contracts = saved_contracts.duplicate(true) if typeof(saved_contracts) == TYPE_DICTIONARY else {}
+	var saved_bonus: Variant = d.get("bonus", {})
+	bonus = saved_bonus.duplicate(true) if typeof(saved_bonus) == TYPE_DICTIONARY else {}
 	var saved_sales: Variant = d.get("sales", {})
 	sales = saved_sales.duplicate(true) if typeof(saved_sales) == TYPE_DICTIONARY else {}
 	stock_mode = bool(d.get("stock_mode", false))        # a save from before stock keeping played the old rules until migrated

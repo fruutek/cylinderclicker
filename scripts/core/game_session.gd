@@ -6,6 +6,7 @@ extends RefCounted
 ## No dependency on the scene tree.
 
 signal factory_unlocked(id: String)
+signal bonus_completed(order: Dictionary, bonus: float)
 signal current_changed(id: String)
 
 var data: GameData
@@ -17,33 +18,44 @@ var contracts: ContractBook          # trade contracts, reputation and dispatch
 var sku_catalog: SkuCatalog          # what can be made and stored
 var sales: SalesOffice               # customers, telephone orders, the sales rep
 var port: StockPort                  # lets the contract book reserve and ship warehouse stock
+var classic := false                # the classic game (variants, delivery van, bonus orders): what players get
+var bonus_orders: BonusOrders
+var migration_note := ""           # what was converted when an older save was loaded (shown once)
 var stock_default := false           # new games keep a warehouse and sell to customers (false = v0.5.1 direct sales, used by the legacy tests)
 var _by_id: Dictionary = {}
 
 
 ## `p_stock` = new games run the warehouse economy; the tests that pin the older sell-on-completion
 ## rules leave it false.
-func _init(p_data: GameData, p_stock: bool = false) -> void:
+func _init(p_data: GameData, p_stock: bool = false, p_classic: bool = false) -> void:
 	data = p_data
-	sku_catalog = SkuCatalog.new(data.skus)
-	stock_default = p_stock and sku_catalog.enabled()
+	classic = p_classic
+	sku_catalog = SkuCatalog.new(data.variants if classic else data.skus)
+	stock_default = p_stock and not classic and sku_catalog.enabled()
 	port = StockPort.new()
 	catalog = ProductCatalog.new(data.products)
-	contract_rules = ContractRules.new(data.contracts)
+	contract_rules = ContractRules.new({} if classic else data.contracts)
 	contracts = ContractBook.new(contract_rules)
 	contracts.port = port
 	contracts.auto_ship_board = stock_default
-	sales = SalesOffice.new(data.customers, contract_rules)
+	sales = SalesOffice.new({} if classic else data.customers, contract_rules)
+	bonus_orders = BonusOrders.new(data.bonus_orders if classic else {})
 	sales.book = contracts
 	contracts.market = Callable(self, "_contract_market")
 	contracts.completed.connect(_on_contract_completed)
 	contracts.failed.connect(_on_contract_failed)
 	contracts.shipment_left.connect(_on_shipment_left)
+	bonus_orders.accepted.connect(_sync_order_variants.unbind(1))
+	bonus_orders.completed.connect(_on_bonus_completed)
+	bonus_orders.expired.connect(_sync_order_variants.unbind(1))
 	contracts.order_ended.connect(sales.order_ended)
 	for def in data.factories:
 		var sim := FactorySim.new(def, catalog, sku_catalog)
 		sim.contracts = contracts
 		sim.sales = sales
+		sim.classic = classic
+		bonus_orders.sims[def.id] = sim
+		sim.produced.connect(_on_produced.bind(def.id))
 		factories.append(sim)
 		_by_id[def.id] = sim
 		port.sims[def.id] = sim
@@ -56,7 +68,9 @@ func new_game() -> void:
 	state.stock_mode = stock_default
 	contracts.reset()
 	sales.reset()
+	bonus_orders.reset()
 	_bind_factories()
+	_sync_order_variants()
 
 
 func load_state(d: Dictionary) -> void:
@@ -65,8 +79,11 @@ func load_state(d: Dictionary) -> void:
 	state.stock_mode = state.stock_mode and stock_default      # a direct-sales session (tests) never runs the warehouse economy
 	contracts.from_dict(state.contracts)
 	sales.from_dict(state.sales)
+	bonus_orders.from_dict(state.bonus)
 	_bind_factories()
 	_apply_stock_migration()
+	_convert_to_classic()
+	_sync_order_variants()
 
 
 ## Gives every defined factory a state (loaded, or fresh if the save predates
@@ -137,6 +154,7 @@ func save_data() -> Dictionary:
 		sim.snapshot()
 	state.contracts = contracts.to_dict()
 	state.sales = sales.to_dict()
+	state.bonus = bonus_orders.to_dict()
 	return state.to_dict()
 
 
@@ -172,6 +190,8 @@ func tick(dt: float) -> void:
 		if sim.state.unlocked:
 			sim.tick(dt)
 	sales.tick(dt)
+	if classic:
+		bonus_orders.tick(dt, state.lifetime_earned)
 	contracts.tick(dt)       # after the factories, so a contract finished this tick beats its deadline
 
 
@@ -374,3 +394,86 @@ func _on_contract_failed(c: Contract, _reason: String, units: float) -> void:
 	var sim := factory(c.factory)
 	if sim != null and units > 0.0:
 		sim.release_stock(units)
+
+
+# ------------------------------------------------------------ the classic game
+func _on_produced(count: float, variant_id: String, factory_id: String) -> void:
+	bonus_orders.note_made(factory_id, variant_id, count)
+
+
+## Each factory makes what an accepted bonus order asks for, then goes back to the player's choice.
+func _sync_order_variants() -> void:
+	for sim in factories:
+		sim.order_variant = bonus_orders.variant_for(sim.data.id)
+
+
+## The bonus rides out on the delivery van with the next load.
+func _on_bonus_completed(order: Dictionary, bonus: float) -> void:
+	var sim := factory(str(order["factory"]))
+	if sim != null:
+		sim.bay.money += bonus / maxf(1.0 + sim.bay.bonus, 1.0)
+	_sync_order_variants()
+	bonus_completed.emit(order, bonus)
+
+
+## An older save (v0.5 contracts, v0.6/0.7 warehouse) comes into the classic game: unfinished contract orders and
+## everything on the shelves are paid out as cash, the warehouse and sales-rep upgrades are refunded, and the
+## specialist tooling that was bought unlocks the matching cylinder. Nothing is lost; it happens once (the old
+## data is cleared as it is converted).
+func _convert_to_classic() -> void:
+	if not classic:
+		return
+	var cash := 0.0
+	var notes: Array[String] = []
+	var stock_value := 0.0
+	for sim in factories:
+		var fs := sim.state
+		var wh: Dictionary = fs.warehouse
+		var units := 0.0
+		var stock: Variant = wh.get("stock", {})
+		if typeof(stock) == TYPE_DICTIONARY:
+			for k: String in stock:
+				units += maxf(float(stock[k]), 0.0)
+		stock_value += units * sim.sku_profit(0)
+		fs.warehouse = {}
+		fs.targets = {}
+		fs.priority = []
+		# retired upgrades: refund what they cost; tooling unlocks the matching product
+		var tooling := {"horizontal_tooling": "variant_cu_hor", "slimline_rig": "variant_cu_slm", "horizontal_cell": "variant_st_hor"}
+		for id: String in sim.data.upgrade_by_id.keys():
+			var def: Dictionary = sim.data.upgrade_by_id[id]
+			if not bool(def.get("stock", false)):
+				continue
+			var lvl := sim.level(id)
+			if lvl <= 0:
+				continue
+			for l in lvl:
+				cash += sim.cost_at_level(id, l)
+			fs.upgrade_levels.erase(id)
+			if tooling.has(id) and sim.data.upgrade_by_id.has(tooling[id]):
+				fs.upgrade_levels[tooling[id]] = 1
+		sim.refresh()
+	cash += stock_value
+	var contract_value := 0.0
+	var cd: Dictionary = state.contracts
+	var active: Variant = cd.get("active", [])
+	if typeof(active) == TYPE_ARRAY:
+		for raw: Variant in active:
+			if typeof(raw) != TYPE_DICTIONARY:
+				continue
+			var qty := maxf(float(raw.get("quantity", 0)), 1.0)
+			var status := str(raw.get("status", "active"))
+			var worth := float(raw.get("value", 0.0))
+			if str(raw.get("sku", "")) != "":
+				contract_value += worth * clampf(float(raw.get("held", 0.0)) / qty, 0.0, 1.0)        # warehouse orders: shipped units were paid already
+			elif status == "active":
+				contract_value += worth * clampf(float(raw.get("delivered", 0.0)) / qty, 0.0, 1.0)
+			else:
+				contract_value += worth
+	cash += contract_value
+	state.contracts = {}
+	state.sales = {}
+	contracts.reset()
+	if cash > 0.0:
+		state.cash = NumFmt.clamp_value(state.cash + cash)
+		migration_note = "Welcome to the classic Cylinder Clicker! Your old warehouse stock, unfinished orders and retired upgrades were turned into %s." % NumFmt.money(cash)

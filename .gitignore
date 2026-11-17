@@ -9,5 +9,6 @@ __pycache__/
 *.pyc
 # Signing keys must never be committed
 *.keystore
+!tools/ci/cylinderclicker-shared-test.keystore
 *.jks
 *.password

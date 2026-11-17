@@ -85,6 +85,21 @@ func _find_edit(root: Node) -> LineEdit:
 	return null
 
 
+## Types like a person: one real key event per character into the focused field (the way the Android
+## keyboard delivers them), never setting the text directly.
+func _type_keys(text: String) -> void:
+	var edit := _find_edit(_scene())
+	edit.grab_focus()
+	for i in text.length():
+		var ev := InputEventKey.new()
+		ev.pressed = true
+		ev.unicode = text.unicode_at(i)
+		ev.keycode = text.unicode_at(i) as Key
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
+	await get_tree().process_frame
+
+
 func _type_name(text: String) -> void:
 	var edit := _find_edit(_scene())
 	edit.text = text
@@ -114,12 +129,17 @@ func _phase_new_game() -> void:
 
 	await _press("New Game")
 	check(_find_edit(_scene()) != null, "New Game opens the naming dialog (no confirmation needed yet)")
-	check(_find_edit(_scene()).text == "My Cylinder Factory", "default name offered")
+	check(_find_edit(_scene()).text == "" and _find_edit(_scene()).placeholder_text == "My Cylinder Factory", "the field starts empty with the default name as a hint (a pre-filled name used up the Android keyboard's 24-character allowance)")
 	await _shot("m02_name_factory")
+	await _type_keys("Telford Cylinder Works")
+	check(_find_edit(_scene()).text == "Telford Cylinder Works", "'Telford Cylinder Works' typed key by key is accepted in full (%s)" % _find_edit(_scene()).text)
+	_find_edit(_scene()).text = ""
+	await _type_keys("ABCDEFGHIJ KLMNOPQRST UVWXYZ")
+	check(_find_edit(_scene()).text.length() == 24 and _find_edit(_scene()).text == "ABCDEFGHIJ KLMNOPQRST UV", "24 characters are accepted, spaces included, and no more (%d)" % _find_edit(_scene()).text.length())
+	_find_edit(_scene()).text = ""
 	await _type_name("    ")
-	check(_find_button("Open the factory").disabled, "blank name cannot be confirmed")
+	check(not _find_button("Open the factory").disabled, "a blank field is allowed: it keeps the default name")
 	await _type_name("Peter's Copper Cylinders")
-	check(not _find_button("Open the factory").disabled, "valid name can be confirmed")
 	await _press("Open the factory")
 	await _wait_scene("Main")
 	check(c.state.factory_name == "Peter's Copper Cylinders", "factory has the chosen name")
@@ -162,7 +182,9 @@ func _phase_new_game() -> void:
 
 	# Rename.
 	await _press("Rename Factory")
-	await _type_name("Taylor & Sons Cylinders")
+	check(_find_edit(_scene()).text == "" and _find_edit(_scene()).placeholder_text == "Peter's Copper Cylinders", "renaming shows the current name as a hint, not pre-filled text")
+	await _type_keys("Taylor & Sons Cylinders")
+	check(_find_edit(_scene()).text == "Taylor & Sons Cylinders", "a 23-character name with symbols and spaces is typed in full")
 	await _shot("m07_rename")
 	await _press("Rename")
 	check(c.state.factory_name == "Taylor & Sons Cylinders", "factory renamed")

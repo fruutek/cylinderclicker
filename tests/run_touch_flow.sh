@@ -11,7 +11,7 @@ SAVE="$DIR/touch_save.json"
 run() {
   local phase="$1"; shift
   xvfb-run -a -s "-screen 0 1428x640x24" "$GODOT" --path . --rendering-driver opengl3 --resolution 1428x640 -- \
-    --direct-sales --touch-ui --safe-inset=38,0 "--save-path=$SAVE" --root-bot=res://tests/touch_flow_bot.gd "--phase=$phase" \
+    --touch-ui --safe-inset=38,0 "--save-path=$SAVE" --root-bot=res://tests/touch_flow_bot.gd "--phase=$phase" \
     ${SHOTS:+"--capture=$SHOTS"} "$@" 2>&1 | grep -E "^  (ok|FAIL|viewport|rapid)|TOUCH FLOW|EXPECT|SCRIPT ERROR|at: " | grep -v "at: \(cleanup\|clear\|init\|set_use\|_free\)" || true
 }
 run 1

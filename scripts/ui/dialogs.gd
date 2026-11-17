@@ -57,23 +57,27 @@ static func _slider_row(text: String, key: String) -> Control:
 	return row
 
 
-## Asks for a factory name. `on_confirm` receives the cleaned, non-blank name.
+## Asks for a factory name. `on_confirm` receives the cleaned name. The field starts EMPTY and shows the
+## current (or default) name as a hint: on Android the native keyboard keeps whatever text it was given, does not
+## mirror a "select all", and enforces the 24-character limit on the old text plus the new, so a pre-filled
+## 19-character name left room for only five letters. Leaving the field blank keeps the name as it was.
 static func name_factory(title: String, initial: String, confirm_text: String, on_confirm: Callable) -> ModalDialog:
 	var d := ModalDialog.new(title, 250)
 	d.add_text("What is your factory called?")
 	var edit := LineEdit.new()
-	edit.text = initial
+	edit.placeholder_text = initial
 	edit.max_length = GameState.MAX_NAME_LENGTH
-	edit.select_all_on_focus = true
 	edit.caret_blink = true
 	edit.context_menu_enabled = false
 	edit.custom_minimum_size = Vector2(0, UiTheme.button_height())
 	d.add_control(edit)
-	d.add_text("Up to %d letters, numbers and symbols. It appears on the sign above the factory floor." % GameState.MAX_NAME_LENGTH, UiTheme.INK_SOFT)
-	var ok := d.add_button(confirm_text, func() -> void: on_confirm.call(GameState.clean_name(edit.text)))
+	d.add_text("Up to %d letters, numbers and symbols (leave blank to keep \"%s\"). It appears on the sign above the factory floor." % [GameState.MAX_NAME_LENGTH, initial], UiTheme.INK_SOFT)
+	var ok := d.add_button(confirm_text, func() -> void:
+		var typed := GameState.clean_typed(edit.text)
+		on_confirm.call(typed if typed != "" else GameState.clean_name(initial)))
 	d.add_button("Cancel")
 	edit.text_changed.connect(func(t: String) -> void:
-		# Drop anything the pixel font cannot draw; blank names cannot be confirmed.
+		# Drop anything the pixel font cannot draw (only touches the field when something was dropped).
 		var cleaned := ""
 		for i in t.length():
 			var code := t.unicode_at(i)
@@ -82,19 +86,16 @@ static func name_factory(title: String, initial: String, confirm_text: String, o
 		if cleaned != t:
 			var caret := edit.caret_column
 			edit.text = cleaned
-			edit.caret_column = mini(caret, cleaned.length())
-		ok.disabled = cleaned.strip_edges().is_empty())
+			edit.caret_column = mini(caret, cleaned.length()))
 	edit.text_submitted.connect(func(_t: String) -> void:
-		if not ok.disabled:
-			ok.pressed.emit())
+		ok.pressed.emit())
 	if UiTheme.touch:
 		d.align_top()      # keep clear of the on-screen keyboard
-	# Start editing straight away: focus alone does not open the on-screen
-	# keyboard on a phone (and on desktop this lets you type immediately).
+	# Start editing straight away: focus alone does not open the on-screen keyboard on a phone.
 	edit.ready.connect(func() -> void:
 		edit.grab_focus()
-		edit.edit()
-		edit.select_all())
+		edit.edit())
+	d.set_meta("name_edit", edit)
 	return d
 
 

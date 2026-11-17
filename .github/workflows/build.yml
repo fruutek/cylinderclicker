@@ -39,10 +39,13 @@ jobs:
       - name: Run contract tests (generation and balance, allocation, dispatch, reputation, deadlines, offline, saves)
         run: godot --headless --path . -s tests/run_contract_tests.gd | tee contract_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" contract_tests.log && grep -q " 0 failed" contract_tests.log
 
-      - name: Run warehouse tests (stock, capacity, SKUs, planner, wholesale, migration, offline)
+      - name: Run classic game tests (variants, delivery van, bonus orders, saves from every version, offline, naming)
+        run: godot --headless --path . -s tests/run_classic_tests.gd | tee classic_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" classic_tests.log && grep -q " 0 failed" classic_tests.log
+
+      - name: Run retired-warehouse engine tests (kept for regression; not part of the game any more)
         run: godot --headless --path . -s tests/run_stock_tests.gd | tee stock_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" stock_tests.log && grep -q " 0 failed" stock_tests.log
 
-      - name: Run order tests (calls, customers, relationships, partial deliveries, backorders, contracts on stock, sales rep)
+      - name: Run retired-order engine tests (kept for regression; not part of the game any more)
         run: godot --headless --path . -s tests/run_order_tests.gd | tee order_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" order_tests.log && grep -q " 0 failed" order_tests.log
 
       - name: Run save/load/offline flow test
@@ -60,15 +63,15 @@ jobs:
           tests/run_touch_flow.sh godot | tee touch_flow.log
           ! grep -q -E "FAIL|SCRIPT ERROR" touch_flow.log && test "$(grep -c 'PASS' touch_flow.log)" = 2
 
-      - name: Run warehouse pages touch test (call answered, stock targets, customers, sales rep - by finger)
+      - name: Run classic touch test (tap with two fingers, choose and buy cylinders, one-button bonus order, van, factories, two hours away)
         run: |
-          tests/run_stock_touch.sh godot | tee stock_touch.log
-          ! grep -q -E "FAIL|SCRIPT ERROR" stock_touch.log && grep -q "STOCK TOUCH: PASS" stock_touch.log
+          tests/run_classic_touch.sh godot | tee classic_touch.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" classic_touch.log && grep -q "CLASSIC TOUCH: PASS" classic_touch.log
 
-      - name: Run warehouse economy flow test (old save > migration > telephone orders > lorries > restart > two hours away)
+      - name: Run classic game flow test (old save > conversion > cylinder picker > bonus order > delivery van > restart > two hours away)
         run: |
-          tests/run_stock_flow.sh godot | tee stock_flow.log
-          ! grep -q -E "FAIL|SCRIPT ERROR" stock_flow.log && test "$(grep -c 'PASS' stock_flow.log)" = 3
+          tests/run_classic_flow.sh godot | tee classic_flow.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" classic_flow.log && test "$(grep -c 'PASS' classic_flow.log)" = 3
 
       - name: Run trade contracts flow test (old save > orders > dispatch > restart mid-dispatch > two hours away)
         run: |
@@ -239,7 +242,7 @@ jobs:
               rm -f dist/*-testkey.apk
               cp "$PRESIGNED" dist/
             else
-              NOTE=$'\n\n**Android update note:** this APK is signed with a temporary test key, so Android will not install it over a copy signed with the permanent key (such as 0.4.0). To move across without losing your factory: in the old game open **Transfer Save > Copy save code**, uninstall the old app, install this APK, then **Transfer Save > Paste save code**. Add the signing secrets described in the README to make future APKs update in place.'
+              NOTE=$'\n\n**Android update note:** this APK is signed with the shared test key that is committed to the repository. From 0.8.0 on every build uses that same key, so future updates install over this one. Android will not install it over 0.4.0 to 0.7.x, which were signed with different keys: uninstall the old game first (to keep your factory, open **Transfer Save > Copy save code** in the old game before uninstalling, then **Transfer Save > Paste save code** here). Add your own signing secrets, described in the README, for a private key.'
             fi
           fi
           ls -la dist

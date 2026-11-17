@@ -1,0 +1,272 @@
+{
+  "_comment": "Cylinder variants for the classic game. One is made at a time; the first of each factory is free, the rest are unlocked by buying the matching 'variant_*' upgrade. Multipliers are relative to the factory's base product.",
+  "warehouse": {},
+  "skus": [
+    {
+      "id": "CU-STD",
+      "name": "Standard Copper",
+      "short": "Standard",
+      "factory": "copper",
+      "family": "standard",
+      "value_mult": 1.0,
+      "material_mult": 1.0,
+      "mfg_mult": 1.0,
+      "work_mult": 1.0,
+      "space": 1.0,
+      "weight": 50,
+      "default_target": 0,
+      "tint": "ffffff",
+      "shape": "normal",
+      "requires": [],
+      "desc": "The classic copper hot water cylinder."
+    },
+    {
+      "id": "CU-DIR",
+      "name": "Direct Copper",
+      "short": "Direct",
+      "factory": "copper",
+      "family": "direct",
+      "value_mult": 1.15,
+      "material_mult": 1.05,
+      "mfg_mult": 1.0,
+      "work_mult": 1.05,
+      "space": 1.0,
+      "weight": 30,
+      "default_target": 0,
+      "tint": "ff9a8a",
+      "shape": "normal",
+      "requires": [
+        {
+          "upgrade": "variant_cu_dir",
+          "level": 1
+        }
+      ],
+      "desc": "Immersion-heated: a little more work, a little more money."
+    },
+    {
+      "id": "CU-IND",
+      "name": "Indirect Copper",
+      "short": "Indirect",
+      "factory": "copper",
+      "family": "indirect",
+      "value_mult": 1.3,
+      "material_mult": 1.15,
+      "mfg_mult": 1.0,
+      "work_mult": 1.2,
+      "space": 1.0,
+      "weight": 20,
+      "default_target": 0,
+      "tint": "8ab4ff",
+      "shape": "normal",
+      "requires": [
+        {
+          "upgrade": "variant_cu_ind",
+          "level": 1
+        }
+      ],
+      "desc": "Heated by a boiler coil. Takes longer to build, sells for much more."
+    },
+    {
+      "id": "CU-SLM",
+      "name": "Slimline Copper",
+      "short": "Slimline",
+      "factory": "copper",
+      "family": "slimline",
+      "value_mult": 1.25,
+      "material_mult": 1.05,
+      "mfg_mult": 1.0,
+      "work_mult": 1.1,
+      "space": 1.0,
+      "weight": 10,
+      "default_target": 0,
+      "tint": "d9f0a0",
+      "shape": "slim",
+      "requires": [
+        {
+          "upgrade": "variant_cu_slm",
+          "level": 1
+        }
+      ],
+      "desc": "Narrow cylinders for tight airing cupboards."
+    },
+    {
+      "id": "CU-HOR",
+      "name": "Horizontal Copper",
+      "short": "Horizontal",
+      "factory": "copper",
+      "family": "horizontal",
+      "value_mult": 1.35,
+      "material_mult": 1.1,
+      "mfg_mult": 1.0,
+      "work_mult": 1.15,
+      "space": 1.0,
+      "weight": 10,
+      "default_target": 0,
+      "tint": "ffd27a",
+      "shape": "wide",
+      "requires": [
+        {
+          "upgrade": "variant_cu_hor",
+          "level": 1
+        }
+      ],
+      "desc": "Built to lie flat in a loft."
+    },
+    {
+      "id": "CU-TWN",
+      "name": "Twin-Coil Copper",
+      "short": "Twin-Coil",
+      "factory": "copper",
+      "family": "twin_coil",
+      "value_mult": 1.6,
+      "material_mult": 1.3,
+      "mfg_mult": 1.0,
+      "work_mult": 1.35,
+      "space": 1.0,
+      "weight": 5,
+      "default_target": 0,
+      "tint": "c9a0ff",
+      "shape": "tall",
+      "requires": [
+        {
+          "upgrade": "variant_cu_twn",
+          "level": 1
+        }
+      ],
+      "desc": "Two coils for solar or a heat pump: the premium copper cylinder."
+    },
+    {
+      "id": "ST-STD",
+      "name": "Standard Stainless",
+      "short": "Standard",
+      "factory": "stainless",
+      "family": "standard",
+      "value_mult": 1.0,
+      "material_mult": 1.0,
+      "mfg_mult": 1.0,
+      "work_mult": 1.0,
+      "space": 1.0,
+      "weight": 50,
+      "default_target": 0,
+      "tint": "ffffff",
+      "shape": "normal",
+      "requires": [],
+      "desc": "The unvented stainless steel cylinder the plant was built for."
+    },
+    {
+      "id": "ST-DIR",
+      "name": "Direct Stainless",
+      "short": "Direct",
+      "factory": "stainless",
+      "family": "direct",
+      "value_mult": 1.15,
+      "material_mult": 1.05,
+      "mfg_mult": 1.05,
+      "work_mult": 1.05,
+      "space": 1.0,
+      "weight": 30,
+      "default_target": 0,
+      "tint": "ff9a8a",
+      "shape": "normal",
+      "requires": [
+        {
+          "upgrade": "variant_st_dir",
+          "level": 1
+        }
+      ],
+      "desc": "Immersion-heated stainless."
+    },
+    {
+      "id": "ST-IND",
+      "name": "Indirect Stainless",
+      "short": "Indirect",
+      "factory": "stainless",
+      "family": "indirect",
+      "value_mult": 1.3,
+      "material_mult": 1.15,
+      "mfg_mult": 1.1,
+      "work_mult": 1.2,
+      "space": 1.0,
+      "weight": 20,
+      "default_target": 0,
+      "tint": "8ab4ff",
+      "shape": "normal",
+      "requires": [
+        {
+          "upgrade": "variant_st_ind",
+          "level": 1
+        }
+      ],
+      "desc": "Stainless with a boiler coil."
+    },
+    {
+      "id": "ST-SLM",
+      "name": "Slimline Stainless",
+      "short": "Slimline",
+      "factory": "stainless",
+      "family": "slimline",
+      "value_mult": 1.25,
+      "material_mult": 1.05,
+      "mfg_mult": 1.05,
+      "work_mult": 1.1,
+      "space": 1.0,
+      "weight": 10,
+      "default_target": 0,
+      "tint": "d9f0a0",
+      "shape": "slim",
+      "requires": [
+        {
+          "upgrade": "variant_st_slm",
+          "level": 1
+        }
+      ],
+      "desc": "Narrow stainless vessels."
+    },
+    {
+      "id": "ST-HOR",
+      "name": "Horizontal Stainless",
+      "short": "Horizontal",
+      "factory": "stainless",
+      "family": "horizontal",
+      "value_mult": 1.35,
+      "material_mult": 1.1,
+      "mfg_mult": 1.1,
+      "work_mult": 1.15,
+      "space": 1.0,
+      "weight": 10,
+      "default_target": 0,
+      "tint": "ffd27a",
+      "shape": "wide",
+      "requires": [
+        {
+          "upgrade": "variant_st_hor",
+          "level": 1
+        }
+      ],
+      "desc": "A horizontal stainless vessel."
+    },
+    {
+      "id": "ST-TWN",
+      "name": "Premium Twin-Coil Stainless",
+      "short": "Premium",
+      "factory": "stainless",
+      "family": "twin_coil",
+      "value_mult": 1.6,
+      "material_mult": 1.3,
+      "mfg_mult": 1.2,
+      "work_mult": 1.35,
+      "space": 1.0,
+      "weight": 5,
+      "default_target": 0,
+      "tint": "c9a0ff",
+      "shape": "tall",
+      "requires": [
+        {
+          "upgrade": "variant_st_twn",
+          "level": 1
+        }
+      ],
+      "desc": "The top of the range: twin-coil stainless for solar and heat pumps."
+    }
+  ]
+}

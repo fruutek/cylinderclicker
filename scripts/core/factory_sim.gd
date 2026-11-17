@@ -14,6 +14,8 @@ signal stats_changed
 signal clicked(stations: Array)
 signal station_finished(index: int)
 signal stocked(count: float, sku_id: String)                  # finished cylinders went into the warehouse
+signal dispatched(cylinders: float, money: float)           # the delivery van left with this load and was paid (classic game)
+signal produced(count: float, variant_id: String)             # cylinders were made (live or while away)
 signal sold_stock(units: float, amount: float, how: String)   # cylinders left for money ("order", "contract" or "wholesale")
 
 const OFFLINE_MIN_SECONDS := 60.0
@@ -35,6 +37,9 @@ var _income_buckets: Array[float] = [] # money earned per second (stock mode)
 var _bucket_time := 0.0
 
 # --- stock keeping (Expansion 4)
+var classic := false                   # the classic game: cylinder variants + a delivery van; no warehouse, contracts or customers
+var bay := DispatchBay.new()           # the delivery van's bay (classic)
+var order_variant := ""                 # what an accepted bonus order wants made right now ("" = none)
 var sku_catalog: SkuCatalog = null
 var skus: Array = []                   # this factory's SKUs (see SkuCatalog); a belt token carries an index into this
 var warehouse := Warehouse.new()
@@ -92,6 +97,8 @@ func bind(p_company: GameState, p_state: FactoryState) -> void:
 ## Copies the cylinders currently on the line into the state, ready to save.
 func snapshot() -> void:
 	state.line = line.to_dict()
+	if classic:
+		state.bay = bay.to_dict()
 	state.warehouse = warehouse.to_dict()
 
 
@@ -106,6 +113,8 @@ func refresh() -> void:
 		rates.append(station_rate(i))
 	line.set_params(works, rates, float(stats.get("belt_speed", 48.0)), float(stats.get("click_power", 1.0)), float(stats.get("click_boost", 0.0)))
 	warehouse.capacity = maxi(int(floorf(float(stats.get("warehouse_capacity", 24.0)) + 1e-6)), 1)
+	if classic:
+		_apply_bay_stats()
 	stats_changed.emit()
 	planner_wake()
 
@@ -160,6 +169,8 @@ func tick(dt: float) -> void:
 		_income_buckets.pop_front()
 		_income_buckets.append(0.0)
 	_planner_clock += dt
+	if classic:
+		bay.tick(dt)
 	_prod_ema += (_buckets_last_rate() - _prod_ema) * minf(dt / 40.0, 1.0)
 	line.tick(dt)
 	if stock_enabled():
@@ -178,15 +189,21 @@ func click() -> Array[int]:
 
 # ---------------------------------------------------------------- economy
 func sale_price() -> float:
+	if variants_enabled():
+		return sku_price(variant_index())
 	return float(product["value"]) * float(stats.get("sell_value", 1.0))
 
 
 func material_cost() -> float:
+	if variants_enabled():
+		return sku_material(variant_index())
 	return float(product["material_cost"]) * float(stats.get("material_cost", 1.0))
 
 
 ## Labour, energy and consumables per cylinder (zero for simple products).
 func manufacturing_cost() -> float:
+	if variants_enabled():
+		return sku_mfg(variant_index())
 	return float(product.get("manufacturing_cost", 0.0)) * float(stats.get("manufacturing_cost", 1.0))
 
 
@@ -257,10 +274,23 @@ func is_maxed(id: String) -> bool:
 	return max_level > 0 and state.level(id) >= max_level
 
 
+## Whether this game ever offers the upgrade at all (a warehouse upgrade is never offered in the classic game):
+## locked rows are only shown for upgrades that will eventually appear.
+func is_offered(id: String) -> bool:
+	var def: Dictionary = data.upgrade_by_id[id]
+	if bool(def.get("stock", false)) and not stock_enabled():
+		return false
+	if bool(def.get("classic", false)) and not classic:
+		return false
+	return true
+
+
 func is_visible(id: String) -> bool:
 	var def: Dictionary = data.upgrade_by_id[id]
 	if bool(def.get("stock", false)) and not stock_enabled():
 		return false             # warehouse and sales upgrades only exist when stock is kept
+	if bool(def.get("classic", false)) and not classic:
+		return false             # vans and new products belong to the classic game
 	return state.earned >= float(def.get("unlock_at", 0)) or state.level(id) > 0
 
 
@@ -274,6 +304,8 @@ func buy(id: String) -> bool:
 	company.cash -= cost(id)
 	state.upgrade_levels[id] = state.level(id) + 1
 	refresh()
+	if classic and str(data.upgrade_by_id[id].get("variant", "")) != "":
+		select_variant(str(data.upgrade_by_id[id]["variant"]))      # a new product is made as soon as it is bought
 	cash_changed.emit()
 	upgrade_purchased.emit(id, state.level(id))
 	return true
@@ -283,6 +315,9 @@ func buy(id: String) -> bool:
 ## never both: contracts take their share first and only the rest earns sale
 ## revenue. With no active contract the whole shipment is sold, exactly as before.
 func _on_line_shipped(count: float, sku_index: int = -1) -> void:
+	if variants_enabled():
+		_ship_to_bay(count, sku_index)
+		return
 	if stock_enabled():
 		_receive_stock(count, sku_index)
 		return
@@ -361,6 +396,8 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 	_credit(cylinders, amount)
 	state.cylinders_sold += sold
 	state.cylinders_contracted += contracted
+	if variants_enabled():
+		produced.emit(cylinders, sku_id(variant_index()))
 	return {
 		"factory": data.id,
 		"name": data.name,
@@ -690,6 +727,9 @@ func prioritise(id: String) -> void:
 
 
 func _bind_stock() -> void:
+	if classic:
+		_bind_classic()
+		return
 	warehouse = Warehouse.new()
 	if skus.is_empty():
 		return
@@ -765,3 +805,68 @@ func migrate_to_stock() -> void:
 	state.auto_targets = true
 	state.auto_production = true
 	state.wholesale_on = true
+
+
+# ============================================================ classic game: variants and the delivery van
+func variants_enabled() -> bool:
+	return classic and not skus.is_empty()
+
+
+## The cylinder the line is making: an accepted bonus order's product first, otherwise the player's choice.
+func variant_index() -> int:
+	if skus.is_empty():
+		return 0
+	if order_variant != "":
+		var o := sku_index(order_variant)
+		if o >= 0 and sku_available(o):
+			return o
+	var i := sku_index(state.variant)
+	return i if i >= 0 and sku_available(i) else 0
+
+
+## The player picks what to make. Returns false if that product is not unlocked.
+func select_variant(id: String) -> bool:
+	var i := sku_index(id)
+	if i < 0 or not sku_available(i):
+		return false
+	state.variant = id
+	stats_changed.emit()
+	return true
+
+
+func _bind_classic() -> void:
+	bay = DispatchBay.new()
+	bay.from_dict(state.bay)
+	bay.departed.connect(_on_bay_departed)
+	_apply_bay_stats()
+	line.spawn_cb = Callable(self, "_spawn_variant") if not skus.is_empty() else Callable()
+
+
+func _apply_bay_stats() -> void:
+	bay.set_stats(10.0 * float(stats.get("van_load", 1.0)), 8.0 * float(stats.get("van_turnaround", 1.0)), float(stats.get("delivery_bonus", 0.0)))
+
+
+func _spawn_variant(_manual: bool) -> Dictionary:
+	var i := variant_index()
+	return {"sku": i, "work_mult": sku_work(i), "count": line.batch}
+
+
+## A finished cylinder reaches dispatch: it waits in the bay for the van. Money arrives when the van leaves.
+func _ship_to_bay(count: float, sku_index_on_token: int) -> void:
+	var i := sku_index_on_token if sku_index_on_token >= 0 and sku_index_on_token < skus.size() else variant_index()
+	bay.add(count, count * sku_profit(i))
+	state.cylinders_made = NumFmt.clamp_value(state.cylinders_made + count)
+	_buckets[_buckets.size() - 1] += count
+	_sale_buckets[_sale_buckets.size() - 1] += count
+	state.best_rate_per_min = maxf(state.best_rate_per_min, recent_rate_per_min())
+	produced.emit(count, sku_id(i))
+	shipped.emit(count, 0.0)
+
+
+func _on_bay_departed(cylinders: float, money: float) -> void:
+	company.cash = NumFmt.clamp_value(company.cash + money)
+	company.lifetime_earned = NumFmt.clamp_value(company.lifetime_earned + money)
+	state.earned = NumFmt.clamp_value(state.earned + money)
+	state.cylinders_sold = NumFmt.clamp_value(state.cylinders_sold + cylinders)
+	cash_changed.emit()
+	dispatched.emit(cylinders, money)

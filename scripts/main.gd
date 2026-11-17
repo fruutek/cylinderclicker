@@ -9,8 +9,6 @@ var _factory: FactoryView
 var _factory_area: Control
 var _hud: Hud
 var _shop: ShopPanel
-var _rel_note := ""
-var _deck: SideDeck             # the phone-first strip beside the factory (warehouse game)
 var _shop_holder: Control
 var _tip_layer: Control
 var _flash: ColorRect
@@ -63,8 +61,6 @@ func _ready() -> void:
 	_hud.settings_pressed.connect(open_pause_menu)
 	_hud.factories_pressed.connect(open_factory_overview)
 	_hud.orders_pressed.connect(open_contract_board)
-	if company.state.stock_mode:
-		_hud.simplify()
 
 	# The tutorial teaches the starting factory, so it lives there.
 	_tutorial = Tutorial.new()
@@ -105,6 +101,12 @@ func _ready() -> void:
 		sim.shipped.connect(_on_factory_shipped.bind(sim))
 		sim.station_finished.connect(_on_factory_station_finished.bind(sim))
 	_connect_contracts()
+	for sim in company.factories:
+		sim.dispatched.connect(_on_factory_dispatched.bind(sim))
+	company.bonus_orders.offered.connect(_on_bonus_offered)
+	company.bonus_orders.accepted.connect(_on_bonus_accepted)
+	company.bonus_orders.completed.connect(_on_bonus_completed)
+	_hud.product_pressed.connect(_on_product_pressed)
 	if company.contracts.unlocked:
 		# Orders that arrived before this scene was built (loading a save) still count as new.
 		_hud.unseen_offers = company.contracts.offers.size()
@@ -129,6 +131,13 @@ func _ready() -> void:
 		Game.pending_offline = {}
 	elif company.state.tutorial_step == 0:
 		_show_intro()
+	if company.migration_note != "":
+		var d := ModalDialog.new("WELCOME TO THE CLASSIC GAME", 300)
+		d.add_text(company.migration_note)
+		d.add_text("Cylinders now wait for the delivery van: you are paid when it drives away. Tap NOW MAKING to choose what to build.", UiTheme.INK_SOFT)
+		d.add_button("Great!")
+		_open(d)
+		company.migration_note = ""
 
 	# Dev tooling: "-- --bot=res://tests/some_bot.gd" attaches an automation script.
 	for arg in OS.get_cmdline_user_args():
@@ -146,24 +155,13 @@ func _show_factory(sim: FactorySim) -> void:
 		_factory.queue_free()
 	if is_instance_valid(_shop):
 		_shop.queue_free()
-	if is_instance_valid(_deck):
-		_deck.queue_free()
 	_shop = null
-	_deck = null
 	_factory = FactoryView.new()
 	_factory_area.add_child(_factory)
 	_factory.setup(sim, company.state)
-	if _simple_ui():
-		_deck = SideDeck.new()
-		_shop_holder.add_child(_deck)
-		_deck.setup(sim, company, _shop_size.x, _shop_size.y)
-		_deck.navigate.connect(open_screen)
-		_deck.message.connect(_toast.bind(2.5))
-		_deck.call_answered.connect(_on_call_answered)
-	else:
-		_shop = ShopPanel.new()
-		_shop_holder.add_child(_shop)
-		_shop.setup(sim, company.state, _tip_layer, _shop_size.x, _shop_size.y)
+	_shop = ShopPanel.new()
+	_shop_holder.add_child(_shop)
+	_shop.setup(sim, company.state, _tip_layer, _shop_size.x, _shop_size.y)
 	_hud.set_factory(sim)
 
 
@@ -223,6 +221,32 @@ func _on_factory_shipped(_count: float, amount: float, sim: FactorySim) -> void:
 		Sfx.play("sale", 0.06, -4.0)
 
 
+## The delivery van has left with a load: the money arrives.
+func _on_factory_dispatched(_cylinders: float, _money: float, sim: FactorySim) -> void:
+	if sim == session:
+		Sfx.play("sale", 0.06, -4.0)
+
+
+func _on_product_pressed() -> void:
+	if _shop != null and _dialog_layer.get_child_count() == 0:
+		_shop.show_tab(2, true)
+
+
+func _on_bonus_offered(order: Dictionary) -> void:
+	Sfx.play("ring", 0.0, -8.0)
+
+
+func _on_bonus_accepted(order: Dictionary) -> void:
+	Sfx.play("buy")
+	_toast("%s want %d x %s: the factory is on it!" % [order["customer"], int(order["qty"]), order["variant_name"]], UiTheme.GOLD, 4.0)
+
+
+func _on_bonus_completed(order: Dictionary, bonus: float) -> void:
+	Sfx.play("fanfare")
+	_flash.color.a = 0.35
+	_toast("Order complete for %s! +%s bonus on the next van" % [order["customer"], NumFmt.money(bonus)], UiTheme.GOLD, 5.0)
+
+
 func _on_factory_station_finished(_index: int, sim: FactorySim) -> void:
 	if sim == session:
 		Sfx.play("thunk", 0.1, -10.0)
@@ -258,10 +282,6 @@ func _process(delta: float) -> void:
 
 
 func _toast(text: String, color: Color, seconds: float = 2.5) -> void:
-	for c in _dialog_layer.get_children():
-		if c is ScreenFrame:
-			(c as ScreenFrame).say(text, color, seconds + 1.5)      # a screen is open: its own message line shows it
-			return
 	if _is_board_open():
 		return        # the board shows the same news itself, and the toast would cover its title
 	_save_toast.text = text
@@ -311,16 +331,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if not modal_open:
 				open_factory_overview()
 		KEY_C:
-			if not modal_open and (company.contracts.unlocked or (company.state.stock_mode and company.sales.unlocked)):
-				if _simple_ui():
-					open_screen("orders")
-				else:
-					open_contract_board()
+			if not modal_open and company.contracts.unlocked:
+				open_contract_board()
 		KEY_1, KEY_2, KEY_3:
 			if not modal_open and _shop != null:
 				_shop.show_tab(event.keycode - KEY_1, true)
-			elif not modal_open and _simple_ui():
-				open_screen(["orders", "stock", "upgrades"][event.keycode - KEY_1])
 	get_viewport().set_input_as_handled()
 
 
@@ -340,54 +355,6 @@ func _open(d: ModalDialog) -> void:
 	_dialog_layer.add_child(d)
 
 
-## The phone-first interface is used whenever the factory keeps a warehouse (the default game).
-func _simple_ui() -> bool:
-	return company.state.stock_mode and session.stock_enabled()
-
-
-## FACTORY | ORDERS | STOCK | UPGRADES. Opening one closes whichever screen was open.
-func open_screen(key: String) -> void:
-	for c in _dialog_layer.get_children():
-		if c is ScreenFrame:
-			c.queue_free()
-		else:
-			return                       # some other dialog is on top (pause, welcome back...): leave it
-	if key == "factory":
-		return
-	var screen: ScreenFrame
-	match key:
-		"orders":
-			screen = OrdersScreen.new(company)
-			(screen as OrdersScreen).order_answered.connect(_on_call_answered)
-			_hud.unseen_offers = 0
-		"stock":
-			screen = StockScreen.new(company)
-		"upgrades":
-			screen = UpgradesScreen.new(company)
-		_:
-			return
-	Sfx.play("blip")
-	screen.navigate.connect(open_screen)
-	screen.details_requested.connect(_open_details)
-	_toast_time = 0.01
-	_open(screen)
-
-
-## The advanced view (the full Contract Board) for anyone who wants every number.
-func _open_details(tab: String) -> void:
-	for c in _dialog_layer.get_children():
-		c.queue_free()
-	var board := ContractBoard.new(company, -1, tab if tab != "" else "offers")
-	board.dispatched.connect(_on_dispatched)
-	_open(board)
-
-
-func _on_call_answered(result: Dictionary, option: String) -> void:
-	var accepted := bool(result.get("accepted", false))
-	Sfx.play("ding" if accepted else ("blip" if option == "decline" else "deny"))
-	_toast(str(result.get("text", "")), UiTheme.GOLD if accepted else UiTheme.CREAM, 3.5)
-
-
 func _show_intro() -> void:
 	var d := ModalDialog.new("CYLINDER CLICKER", 300)
 	d.esc_closes = false
@@ -399,13 +366,12 @@ func _show_intro() -> void:
 
 func _show_offline(summary: Dictionary) -> void:
 	var trade: Dictionary = summary.get("contracts", {})
-	var office: Dictionary = summary.get("sales", {})
-	var d := ModalDialog.new("WELCOME BACK!", (330 if not trade.is_empty() else 280) + (36 if not office.is_empty() else 0))
+	var d := ModalDialog.new("WELCOME BACK!", 330 if not trade.is_empty() else 280)
 	d.esc_closes = false
 	var built := float(summary["cylinders"]) > 0.0
 	d.add_text("You were away for %s.%s" % [NumFmt.duration(summary["away_seconds"]), " Your machines kept the line running." if built else ""])
 	var parts: Array = summary.get("factories", [])
-	if parts.size() > 1 and not _simple_ui():
+	if parts.size() > 1:
 		var lines := ""
 		for part: Dictionary in parts:
 			lines += "%s:  %s cylinders,  %s\n" % [part["name"], NumFmt.number(part["cylinders"]), NumFmt.money(part["cash"])]
@@ -414,23 +380,8 @@ func _show_offline(summary: Dictionary) -> void:
 		d.add_text("Cylinders built:  %s\nSold for:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])] if not trade.is_empty() else "Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
 	if summary["capped"]:
 		d.add_text("(The factory runs unattended for up to %s.)" % NumFmt.duration(summary["counted_seconds"]), UiTheme.INK_SOFT)
-	if not office.is_empty():
-		var waiting := int(office.get("calls_waiting", 0))
-		var missed := int(office.get("missed", 0))
-		if waiting > 0:
-			d.add_text("%d customer%s waiting for you." % [waiting, "s are" if waiting != 1 else " is"], Color("a9760a"))
-		if missed > 0:
-			d.add_text("%d call%s lapsed while you were away." % [missed, "s" if missed != 1 else ""], UiTheme.INK_SOFT)
-	if not trade.is_empty() and _simple_ui():
-		var sent := (trade.get("paid", []) as Array).size()
-		if sent > 0:
-			d.add_text("%d order%s delivered while you were away." % [sent, "s" if sent != 1 else ""], UiTheme.GREEN)
-		for f: Dictionary in trade.get("failed", []):
-			d.add_text("%s gave up waiting." % f["customer"], UiTheme.RED)
-	elif not trade.is_empty():
+	if not trade.is_empty():
 		_add_contract_summary(d, trade)
-	if int(office.get("rep_orders", 0)) > 0:
-		d.add_text("Your sales rep took %d order%s for you." % [int(office["rep_orders"]), "s" if int(office["rep_orders"]) != 1 else ""], UiTheme.INK_SOFT)
 	d.add_button("Lovely!", func() -> void: Sfx.play("sale"))
 	_open(d)
 	if company.state.tutorial_step == 0:
@@ -483,10 +434,7 @@ func _connect_contracts() -> void:
 	book.completed.connect(_on_contract_completed)
 	book.failed.connect(_on_contract_failed)
 	book.rank_changed.connect(_on_rank_changed)
-	book.shipment_left.connect(_on_shipment_left)
-	book.order_ended.connect(_on_order_ended)
-	company.sales.call_arrived.connect(_on_call_arrived)
-	company.sales.relationship_moved.connect(_on_relationship_moved)
+
 
 
 func _on_board_unlocked() -> void:
@@ -496,7 +444,7 @@ func _on_board_unlocked() -> void:
 
 
 func _on_offer_added(o: Contract) -> void:
-	if _is_board_open() or _simple_ui():
+	if _is_board_open():
 		return
 	_hud.unseen_offers += 1
 	if Time.get_ticks_msec() - _board_unlocked_at > 1500:
@@ -520,61 +468,7 @@ func _on_contract_failed(c: Contract, reason: String, units: float) -> void:
 	if reason == "cancelled":
 		return
 	Sfx.play("deny")
-	if company.factory(c.factory).stock_enabled():
-		_toast("%s: %s. The stock set aside went back on the shelves, reputation -%d." % [c.customer, "deadline missed" if reason == "deadline" else "order given up", c.penalty], Color("ff8a70"), 6.0)
-		return
 	_toast("%s: %s. %s cylinders sold, reputation -%d." % [c.customer, "deadline missed" if reason == "deadline" else "order given up", NumFmt.number(units), c.penalty], Color("ff8a70"), 6.0)
-
-
-## The telephone rings: a customer wants stock. Answer it on the CALLS tab of the board.
-func _on_call_arrived(call: Dictionary) -> void:
-	if _is_board_open():
-		Sfx.play("ring", 0.0, -8.0)
-		return
-	Sfx.play("ring", 0.0, -4.0)
-	if _simple_ui():
-		return                           # the customer is already on the side deck, with the buttons
-	var cust := company.sales.find_customer(str(call["customer"]))
-	_toast("The phone is ringing: %s. Tap ORDERS." % str(cust.get("name", "a customer")) if UiTheme.touch else "The phone is ringing: %s. Open ORDERS (C)." % str(cust.get("name", "a customer")), UiTheme.GOLD, 5.0)
-
-
-## A warehouse lorry has left: money for the cylinders on it.
-func _on_shipment_left(c: Contract, units: float, amount: float) -> void:
-	if _simple_ui():
-		Sfx.play("sale")
-		return
-	if c.shipped < float(c.quantity) - ContractBook.EPS:        # the last lorry has its own "delivered" message
-		Sfx.play("sale")
-		_toast("Lorry to %s: %s cylinders, +%s" % [c.customer, NumFmt.number(units), NumFmt.money(amount)], UiTheme.GOLD, 4.0)
-
-
-func _on_order_ended(c: Contract, outcome: String) -> void:
-	var note := _rel_note
-	_rel_note = ""
-	match outcome:
-		"complete", "late_complete":
-			Sfx.play("ding")
-			var line := "Delivered to %s: %s paid" % [c.customer, NumFmt.money(c.paid_total)]
-			if note != "":
-				line += "  -  " + note
-			_toast(line, UiTheme.GOLD, 5.0)
-		_:
-			Sfx.play("deny")
-			_toast("%s gave up waiting! %s" % [c.customer, note], Color("ff8a70"), 6.0)
-
-
-## How a customer feels about how it went, in a few words. Order results add it to their message;
-## everything else (turning a customer down) says it straight away.
-func _on_relationship_moved(_id: String, customer_name: String, delta: float, reason: String) -> void:
-	match reason:
-		"happy":
-			_rel_note = "Customer happy! +%d relationship" % maxi(1, roundi(delta))
-		"late":
-			_rel_note = "Delivery late! Customer unhappy."
-		"gave_up":
-			_rel_note = "Relationship %d" % roundi(delta)
-		"declined":
-			_toast("%s is disappointed (%d)" % [customer_name, roundi(delta)], Color("ffb08a"), 3.0)
 
 
 func _on_rank_changed(index: int, rank_name: String) -> void:

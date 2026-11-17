@@ -1,0 +1,18 @@
+{
+  "_comment": "Occasional optional bonus orders: a customer wants some cylinders of a product you can make. Accept (one button) and the factory works on it by itself; when the last one is made you earn a bonus on top of the normal sales. Ignoring an offer costs nothing. 'minutes' = how many minutes of the factory's output an order asks for.",
+  "unlock_earned": 1500,
+  "first_offer_seconds": 120,
+  "gap_min_seconds": 150,
+  "gap_max_seconds": 260,
+  "offer_lifetime": 75,
+  "minutes": 1.0,
+  "min_quantity": 8,
+  "max_quantity": 500,
+  "bonus_fraction": 0.4,
+  "time_limit_factor": 4.0,
+  "names": [
+    "Midlands Plumbing", "Brook & Sons Heating", "Severn Building Supplies", "Northgate Plumbing Merchants", "Harbour Heating Services",
+    "Ridgeway Installations", "Thornley Homes", "Dalton Developments", "Pennine Plumbing Wholesale", "Fenwick Builders' Merchants",
+    "Hartley Heating & Plumbing", "Marlow Trade Counter", "Ashworth Housing Group", "Calder Valley Supplies", "Tamworth Plumbing Supplies"
+  ]
+}

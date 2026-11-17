@@ -10,6 +10,8 @@ const PRODUCTS_PATH := "res://data/products.json"
 const CONTRACTS_PATH := "res://data/contracts.json"
 const SKUS_PATH := "res://data/skus.json"
 const CUSTOMERS_PATH := "res://data/customers.json"
+const VARIANTS_PATH := "res://data/variants.json"
+const BONUS_PATH := "res://data/bonus_orders.json"
 
 var factories: Array[FactoryDef] = []
 var factory_by_id: Dictionary = {}
@@ -17,6 +19,8 @@ var products: Dictionary = {}
 var contracts: Dictionary = {}        # trade contract rules (ranks, tiers, customers)
 var skus: Dictionary = {}             # stock-keeping units and warehouse tuning (Expansion 4)
 var customers: Dictionary = {}        # telephone customers and call tuning (Expansion 4)
+var variants: Dictionary = {}         # cylinder variants of the classic game
+var bonus_orders: Dictionary = {}     # the occasional optional bonus orders
 
 
 static func load_json(path: String) -> Dictionary:
@@ -36,6 +40,8 @@ func load_all() -> bool:
 	contracts = load_json(CONTRACTS_PATH)     # optional: without it the game simply has no contracts
 	skus = load_json(SKUS_PATH)               # optional: without it the game stays in direct-sales mode
 	customers = load_json(CUSTOMERS_PATH)     # optional: without it nobody telephones
+	variants = load_json(VARIANTS_PATH)
+	bonus_orders = load_json(BONUS_PATH)
 	var raw := load_json(FACTORIES_PATH)
 	if products.is_empty() or raw.is_empty():
 		return false

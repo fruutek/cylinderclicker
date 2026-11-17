@@ -20,13 +20,9 @@ const TOUCH_HINTS := {
 	6: "FULLY AUTOMATED! Upgrade the slowest machine to lift the bottleneck. Tapping still speeds everything up. Enjoy!",
 }
 
-## Wording when the factory keeps a warehouse (the default game).
-const STOCK_HINTS := {
-	2: "Finished cylinders go into your WAREHOUSE (the racks). Customers telephone for them: answer on the card at the right.",
-	3: "You can afford an upgrade! Tap BUY on the NEXT UPGRADE card at the right.",
-	4: "Nice! Next save up for a machine: it runs a station for you. The card at the right always shows what to buy next.",
-	5: "It runs by itself! Automate all six stations. The line builds what your warehouse and customers need.",
-	6: "FULLY AUTOMATED! Tap STOCK to see your shelves and your sales rep's advice. Customers pay best when their order is in stock.",
+## Wording for the classic game (cylinders wait for the delivery van).
+const CLASSIC_HINTS := {
+	2: "Finished cylinders wait at the dispatch bay for the VAN. When it drives off, you are paid! Keep clicking - your first upgrade costs £15.",
 }
 
 var session: FactorySim          # the starting factory the hints talk about
@@ -97,8 +93,8 @@ func _update() -> void:
 	if step != _shown_step and visible:
 		if _shown_step != -1:
 			Sfx.play("blip")
-		if company.stock_mode and STOCK_HINTS.has(step):
-			_label.text = STOCK_HINTS[step]
+		if session.classic and CLASSIC_HINTS.has(step):
+			_label.text = CLASSIC_HINTS[step]
 		else:
 			_label.text = TOUCH_HINTS[step] if UiTheme.touch and TOUCH_HINTS.has(step) else HINTS[step]
 		reset_size()

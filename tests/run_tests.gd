@@ -391,7 +391,7 @@ func test_line_persistence() -> void:
 
 
 func test_v1_migration() -> void:
-	check(SaveManager.SAVE_VERSION == 5, "save format is version 5")
+	check(SaveManager.SAVE_VERSION == 6, "save format is version 6")
 	SaveManager.delete_save(TEST_SAVE)
 	var f := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
 	f.store_string(JSON.stringify({"game": "cylinder_clicker", "version": 1, "state": {

@@ -18,8 +18,6 @@ var company: GameSession
 var book: ContractBook
 
 var _tab := 0
-var _keys: Array[String] = ["offers", "active", "history"]
-var _stock_ui: BoardStockPages = null       # the warehouse-economy pages (stock mode only)
 var _tab_buttons: Array[Button] = []
 var _holder: Control
 var _page: Control = null
@@ -38,29 +36,14 @@ var _active_cards := {}     # contract id -> refs for live updates
 var _inner_w := 580
 
 
-func _init(p_company: GameSession, p_tab: int = -1, p_key: String = "") -> void:
+func _init(p_company: GameSession, p_tab: int = -1) -> void:
 	super("CONTRACT BOARD", 616)
 	company = p_company
 	book = company.contracts
-	var stocking := false
-	for sim in company.factories:
-		if sim.state.unlocked and sim.stock_enabled():
-			stocking = true
-	if stocking:
-		_keys = ["offers", "active", "calls", "stock", "customers", "rep", "history"]
-		_stock_ui = BoardStockPages.new(self)
-	if p_key != "" and _keys.has(p_key):
-		_tab = _keys.find(p_key)
-	elif p_tab >= 0:
-		_tab = _keys.find(["offers", "active", "history"][mini(p_tab, 2)]) if p_tab <= 2 else mini(p_tab, _keys.size() - 1)
-	elif _stock_ui != null and company.sales.calls.size() > 0:
-		_tab = _keys.find("calls")
+	if p_tab >= 0:
+		_tab = p_tab
 	elif book.active.size() > 0:
-		_tab = _keys.find("active")
-
-
-func _tab_key() -> String:
-	return _keys[clampi(_tab, 0, _keys.size() - 1)]
+		_tab = 1
 
 
 func _ready() -> void:
@@ -99,7 +82,7 @@ func _process(delta: float) -> void:
 	if _timer <= 0.0:
 		_timer = 0.2
 		_refresh(false)
-		if _message_time <= 0.0 and _tab_key() == "active" and _stock_ui == null:
+		if _message_time <= 0.0 and _tab == 1:
 			_set_default_message()      # the share warning follows the share buttons
 
 
@@ -173,7 +156,7 @@ func _update_header() -> void:
 func _build_tabs() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
-	for i in _keys.size():
+	for i in TAB_NAMES.size():
 		var b := Button.new()
 		b.focus_mode = Control.FOCUS_NONE
 		b.custom_minimum_size = Vector2(0, UiTheme.button_height(18))
@@ -194,27 +177,21 @@ func show_tab(index: int, with_sound: bool = false) -> void:
 
 func _style_tabs() -> void:
 	var ready := book.count_status(Contract.Status.READY)
-	var calls := company.sales.calls.size()
-	var names := {
-		"offers": "AVAILABLE (%d)" % book.offers.size(),
-		"active": "ACTIVE (%d/%d%s)%s" % [book.board_active_count(), book.slots(), (" +%d" % book.call_active_count()) if book.call_active_count() > 0 else "", " !" if ready > 0 else ""],
-		"calls": "CALLS (%d)%s" % [calls, " !" if calls > 0 else ""],
-		"stock": "STOCK",
-		"customers": "CUSTOMERS",
-		"rep": "SALES REP",
-		"history": "HISTORY",
-	}
+	var names := [
+		"AVAILABLE (%d)" % book.offers.size(),
+		"ACTIVE (%d/%d)%s" % [book.active.size(), book.slots(), " !" if ready > 0 else ""],
+		"HISTORY",
+	]
 	for i in _tab_buttons.size():
-		var key := _keys[i]
 		var active := i == _tab
 		var sb := UiTheme.flat(UiTheme.COPPER if active else UiTheme.PARCH_DARK, UiTheme.WOOD_DARK, 1, 2)
 		for state: String in ["normal", "hover", "pressed"]:
 			_tab_buttons[i].add_theme_stylebox_override(state, sb)
-		var col := UiTheme.PARCH_LIGHT if active else (GOLD_DARK if ((key == "active" and ready > 0) or (key == "calls" and calls > 0)) else UiTheme.INK)
+		var col := UiTheme.PARCH_LIGHT if active else (GOLD_DARK if (i == 1 and ready > 0) else UiTheme.INK)
 		_tab_buttons[i].add_theme_color_override("font_color", col)
 		_tab_buttons[i].add_theme_color_override("font_hover_color", col)
 		_tab_buttons[i].add_theme_color_override("font_pressed_color", col)
-		_tab_buttons[i].text = names[key]
+		_tab_buttons[i].text = names[i]
 
 
 # ---------------------------------------------------------------- refresh
@@ -222,21 +199,13 @@ func _style_tabs() -> void:
 ## nothing is replaced under a finger because of something happening on another tab.
 func _make_signature() -> String:
 	var sig := "%d|%s|" % [_tab, str(book.unlocked)]
-	match _tab_key():
-		"offers":
+	match _tab:
+		0:
 			for o in book.offers:
 				sig += o.id + ","
-		"active":
+		1:
 			for c in book.active:
 				sig += "%s:%d," % [c.id, c.status]      # not progress: the bars and numbers update in place
-		"calls":
-			sig += _stock_ui.calls_signature()
-		"stock":
-			sig += _stock_ui.stock_signature()
-		"customers":
-			sig += _stock_ui.customers_signature()
-		"rep":
-			sig += _stock_ui.rep_signature()
 		_:
 			sig += str(book.history.size())
 	return sig
@@ -257,9 +226,6 @@ func _refresh(force: bool) -> void:
 func _set_default_message() -> void:
 	_message_time = 0.0
 	_message.add_theme_color_override("font_color", UiTheme.INK_SOFT)
-	if _stock_ui != null:
-		_set_stock_message()
-		return
 	# Warn when a factory has promised nearly all its output: it will barely be selling.
 	if _tab == 1:
 		for sim in company.factories:
@@ -280,25 +246,6 @@ func _set_default_message() -> void:
 		_message.text = "Your last orders."
 
 
-func _set_stock_message() -> void:
-	match _tab_key():
-		"offers":
-			_message.text = "Board contracts are filled from your warehouse: stock on the shelves is put aside for it at once."
-		"active":
-			_message.text = "Phone orders ship by themselves. Press SHIP for a board contract: paid per lorry, bonus when complete."
-		"calls":
-			_message.text = "Answer before they hang up (else your rep takes it, cheaper). Refusing too often loses a customer."
-		"stock":
-			_message.text = "The line builds to your targets and to waiting customers. Surplus goes to the wholesaler, never thrown away."
-		"customers":
-			_message.text = "Good relationships mean bigger orders, better prices, more patience. Loyalty builds slowly."
-		"rep":
-			_message.text = "Your rep forecasts what customers will ask for: odds, not a promise. Training makes it sharper."
-		_:
-			_message.text = "Your last orders."
-	_message.add_theme_color_override("font_color", UiTheme.INK_SOFT)
-
-
 func _say(text: String, color: Color = UiTheme.INK, seconds: float = 5.0) -> void:
 	_message.text = text
 	_message.add_theme_color_override("font_color", color)
@@ -310,19 +257,11 @@ func _rebuild_page() -> void:
 		_page.queue_free()
 	_offer_cards.clear()
 	_active_cards.clear()
-	match _tab_key():
-		"offers":
+	match _tab:
+		0:
 			_page = _build_available()
-		"active":
+		1:
 			_page = _build_active()
-		"calls":
-			_page = _stock_ui.build_calls()
-		"stock":
-			_page = _stock_ui.build_stock()
-		"customers":
-			_page = _stock_ui.build_customers()
-		"rep":
-			_page = _stock_ui.build_rep()
 		_:
 			_page = _build_history()
 	_holder.add_child(_page)
@@ -550,20 +489,16 @@ func _on_accept(id: String) -> void:
 		Sfx.play("deny")
 		return
 	Sfx.play("stamp")
-	_tab = _keys.find("active")
+	_tab = 1
 	_signature = ""
 	_refresh(true)
-	if _stock_ui != null:
-		_say("Contract accepted! Anything already on the shelves has been put aside for it; the line builds the rest.", UiTheme.GREEN)
-	else:
-		_say("Contract accepted! Choose how much of the factory to commit with the share buttons.", UiTheme.GREEN)
+	_say("Contract accepted! Choose how much of the factory to commit with the share buttons.", UiTheme.GREEN)
 
 
 # ----------------------------------------------------------------- ACTIVE
 func _build_active() -> Control:
 	if book.active.is_empty():
-		return _empty_note("No open orders. Answer a telephone call on the CALLS tab or accept a contract on AVAILABLE." if _stock_ui != null
-			else "No contracts yet. Accept an order on the AVAILABLE tab, then come back here to set how much production goes to it.")
+		return _empty_note("No contracts yet. Accept an order on the AVAILABLE tab, then come back here to set how much production goes to it.")
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(_inner_w, HOLDER_H)
 	scroll.size = Vector2(_inner_w, HOLDER_H)
@@ -592,8 +527,6 @@ func _build_active() -> Control:
 
 
 func _active_card(c: Contract) -> Control:
-	if _stock_ui != null and book._stock(c):
-		return _stock_ui.active_card(c)
 	var card := _card(c.premium, _tier_color(c))
 	var row := _row(6)
 	card.add_child(row)
@@ -871,15 +804,3 @@ func _history_row(h: Dictionary) -> Control:
 func _update_live() -> void:
 	_update_offer_cards()
 	_update_active_cards()
-	if _stock_ui != null:
-		match _tab_key():
-			"active":
-				_stock_ui.update_all_orders()
-			"calls":
-				_stock_ui.update_calls()
-			"stock":
-				_stock_ui._update_stock()
-			"customers":
-				_stock_ui.update_customers()
-			"rep":
-				_stock_ui._update_rep()

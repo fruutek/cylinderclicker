@@ -4,6 +4,7 @@ extends Control
 ## cylinders made, live rate), the Factories button and the menu button.
 
 signal settings_pressed
+signal product_pressed
 signal factories_pressed
 signal orders_pressed
 
@@ -176,6 +177,8 @@ func setup(p_company: GameSession) -> void:
 	for sim in company.factories:
 		sim.shipped.connect(_on_any_shipped.bind(sim))
 	(_stars as RepStars).book = company.contracts
+	if company.classic:
+		_make_classic()
 
 
 ## Fits the bar to the screen width. At 640 wide with no insets this is
@@ -193,6 +196,104 @@ func layout(total_width: float, inset_left: float, inset_right: float) -> void:
 			node.position.x = float(item[1]) + (total_width - 640.0) - inset_right
 		else:
 			node.position.x = float(item[1]) + inset_left + floorf(extra * group / 5.0)
+
+
+var _chip: Control
+var _chip_name: Label
+var _chip_sub: Label
+var _chip_bar: PixelBar
+var _chip_btn: Button
+var _chip_timer := 0.0
+
+
+## The classic bar: cash, what is being made (tap to choose), output, factories and the menu. The orders button,
+## the reputation stars, profit and the cylinder count are gone; a bonus order appears in the freed space.
+func _make_classic() -> void:
+	simple = true
+	for item: Array in _groups:
+		if int(item[2]) in [2, 3]:
+			(item[0] as Control).visible = false
+	_stars.visible = false
+	_orders.visible = false
+	_product.clip_text = true
+	_product.size = Vector2(90, 10)
+	# tap NOW MAKING to pick the cylinder
+	var pick := Button.new()
+	pick.flat = true
+	pick.focus_mode = Control.FOCUS_NONE
+	pick.position = Vector2(142, 1)
+	pick.size = Vector2(88, 28)
+	pick.tooltip_text = "Choose what to make"
+	pick.pressed.connect(func() -> void: product_pressed.emit())
+	add_child(pick)
+	_groups.append([pick, 142.0, 1])
+	# the one-button bonus order
+	_chip = PanelContainer.new() if false else Control.new()
+	_chip.position = Vector2(236, 2)
+	_chip.size = Vector2(166, 26)
+	var bg := Panel.new()
+	bg.add_theme_stylebox_override("panel", UiTheme.flat(UiTheme.PARCH_LIGHT, Color("c9a227"), 2, 2))
+	bg.size = _chip.size
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chip.add_child(bg)
+	_chip_name = UiTheme.label("", UiTheme.COPPER.darkened(0.3))
+	_chip_name.position = Vector2(5, 3)
+	_chip_name.size = Vector2(104, 10)
+	_chip_name.clip_text = true
+	_chip.add_child(_chip_name)
+	_chip_sub = UiTheme.label("", UiTheme.INK)
+	_chip_sub.position = Vector2(5, 14)
+	_chip_sub.size = Vector2(104, 10)
+	_chip_sub.clip_text = true
+	_chip.add_child(_chip_sub)
+	_chip_bar = PixelBar.new(6.0)
+	_chip_bar.position = Vector2(5, 17)
+	_chip_bar.size = Vector2(100, 6)
+	_chip.add_child(_chip_bar)
+	_chip_btn = Button.new()
+	_chip_btn.text = "ACCEPT"
+	_chip_btn.focus_mode = Control.FOCUS_NONE
+	_chip_btn.position = Vector2(110, 2)
+	_chip_btn.size = Vector2(54, 22)
+	var gold := UiTheme.flat(Color("f2c14e"), UiTheme.WOOD_DARK, 1, 2)
+	_chip_btn.add_theme_stylebox_override("normal", gold)
+	_chip_btn.add_theme_stylebox_override("hover", UiTheme.flat(Color("ffd978"), UiTheme.COPPER, 1, 2))
+	_chip_btn.add_theme_stylebox_override("pressed", gold)
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		_chip_btn.add_theme_color_override(c, UiTheme.INK)
+	_chip_btn.pressed.connect(func() -> void: company.bonus_orders.accept())
+	_chip.add_child(_chip_btn)
+	_chip.visible = false
+	add_child(_chip)
+	_groups.append([_chip, 236.0, 2])
+	if UiTheme.touch:
+		pick.size = Vector2(88, 30)
+		_chip.size = Vector2(166, 28)
+		bg.size = _chip.size
+		_chip_btn.size = Vector2(54, 24)
+
+
+func _update_chip() -> void:
+	var bo := company.bonus_orders
+	if not bo.offer.is_empty():
+		_chip.visible = true
+		_chip_name.text = str(bo.offer["customer"]).to_upper()
+		_chip_sub.text = "%d x %s  +%s" % [int(bo.offer["qty"]), str(bo.offer["variant_name"]).split(" ")[0], NumFmt.money(float(bo.offer["reward"]))]
+		_chip_sub.visible = true
+		_chip_bar.visible = false
+		_chip_btn.visible = true
+		_chip.modulate = Color.WHITE if int(_blink * 2.0) % 2 == 0 else Color("fff0c0")
+	elif not bo.active.is_empty():
+		_chip.visible = true
+		_chip_name.text = str(bo.active["customer"]).to_upper()
+		_chip_sub.visible = false
+		_chip_bar.visible = true
+		_chip_bar.value = float(bo.active["made"]) / float(maxi(int(bo.active["qty"]), 1))
+		_chip_bar.text = "%d/%d" % [int(bo.active["made"]), int(bo.active["qty"])]
+		_chip_btn.visible = false
+		_chip.modulate = Color.WHITE
+	else:
+		_chip.visible = false
 
 
 ## The phone-first bar: cash, what is being made, the factory switcher and the menu. Statistics, the orders
@@ -239,7 +340,10 @@ func _process(delta: float) -> void:
 
 	var per_min := session.recent_rate_per_min()
 	_income.text = "%s/sec" % NumFmt.money(company.recent_income_per_second())
-	if session.stock_enabled():
+	if session.variants_enabled():
+		_product.text = String(session.skus[session.variant_index()].get("short", session.skus[session.variant_index()]["name"]))
+		_profit.text = NumFmt.money(session.profit_per_cylinder())
+	elif session.stock_enabled():
 		_product.text = String(session.skus[session.current_sku]["name"])
 		_profit.text = NumFmt.money(session.sku_profit(session.current_sku))
 	else:
@@ -247,6 +351,12 @@ func _process(delta: float) -> void:
 		_profit.text = NumFmt.money(session.profit_per_cylinder())
 	_made.text = NumFmt.number(session.state.cylinders_made)
 	_rate.text = "%s/min" % NumFmt.number(per_min, 1)
+
+	if _chip != null:
+		_chip_timer -= delta
+		if _chip_timer <= 0.0:
+			_chip_timer = 0.15
+			_update_chip()
 
 	# Orders: appears once customers start calling, with a badge for anything waiting for you
 	# (orders ready to dispatch, new offers) and a gold glow when a lorry can be sent.
@@ -264,7 +374,7 @@ func _process(delta: float) -> void:
 				_badge.reset_size()
 				_badge.position = Vector2(_orders.size.x - _badge.size.x + 3.0, -3.0)
 		_orders_style.bg_color = UiTheme.GOLD.darkened(0.25) if ready > 0 and int(_blink * 2.5) % 2 == 0 else UiTheme.WOOD_LIGHT
-	if book.reputation != _rep_shown:
+	if book.rules.enabled and book.reputation != _rep_shown:
 		_rep_shown = book.reputation
 		_stars.tooltip_text = "Company reputation: %s (%d)" % [book.rank_name(), book.reputation]
 

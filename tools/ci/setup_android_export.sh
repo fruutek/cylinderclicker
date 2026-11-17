@@ -2,8 +2,7 @@
 # CI helper: points Godot at the runner's Android SDK and Java, and prepares
 # the signing key. With the repository secrets ANDROID_KEYSTORE_BASE64 and
 # ANDROID_KEYSTORE_PASSWORD set, builds are signed with your permanent key.
-# Without them a throw-away key is generated (fine for testing, but such an
-# APK cannot update an installed copy signed with a different key).
+# Without them the shared test key committed in this folder is used (stable across builds, but not private).
 set -euo pipefail
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 JAVA="${JAVA_HOME_17_X64:-${JAVA_HOME:-}}"
@@ -23,12 +22,14 @@ if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}
   echo "signing=release" >> "$GITHUB_OUTPUT"
   echo "Using the permanent signing key from repository secrets."
 else
-  PASSWORD="temporary-ci-key"
-  ALIAS="temporary"
-  keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 -alias "$ALIAS" -keyalg RSA -keysize 2048 \
-    -validity 365 -storepass "$PASSWORD" -keypass "$PASSWORD" -dname "CN=Cylinder Clicker CI test key" >/dev/null 2>&1
+  # No signing secrets: use the shared test key that is committed to the repository. It is one fixed key (not
+  # a secret: anyone can read it), so every build signed with it can update the previous one in place. It is fine
+  # for a hobby game and for testing; a store release needs a private key supplied through the secrets above.
+  KEYSTORE="$(pwd)/tools/ci/cylinderclicker-shared-test.keystore"
+  PASSWORD="cylinderclicker-test"
+  ALIAS="cylinderclicker-test"
   echo "signing=testkey" >> "$GITHUB_OUTPUT"
-  echo "::warning::No signing secrets set - this build is signed with a throw-away test key."
+  echo "::warning::No signing secrets set - this build is signed with the shared test key (stable, but not private)."
 fi
 {
   echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KEYSTORE"

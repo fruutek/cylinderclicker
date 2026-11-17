@@ -356,6 +356,9 @@ func _phase_play() -> void:
 ## Customer contracts with real touch input: open the board, accept, change the
 ## production share, wait for the order to fill, dispatch it and see it paid.
 func _touch_contracts(c: GameSession, main: Node) -> void:
+	if not c.contracts.rules.enabled:
+		check(true, "classic game: no contract board to test (see tests/classic_touch_bot.gd)")
+		return
 	var copper := c.factory("copper")
 	if not c.contracts.unlocked:
 		c.contracts.tick(1.0)              # the unlock check runs twice a second: do not depend on the runner's frame rate

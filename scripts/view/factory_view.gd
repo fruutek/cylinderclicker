@@ -36,7 +36,7 @@ var _overlay_layer: Node2D
 var _fx_layer: Node2D
 var _van: Sprite2D
 var _yard: DispatchYard
-var _stock_yard: StockYard
+var _vans: VanYard               # the classic game's delivery van
 var _fronts: Array[Sprite2D] = []
 var _workers: Array[Sprite2D] = []
 var _cabinets: Array[Sprite2D] = []
@@ -107,12 +107,10 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 	add_child(_yard)
 	_yard.setup(session, self, _van_pos)
 
-	# Finished goods: the warehouse racking fills with pallets as stock arrives (stock mode only).
-	if session.stock_enabled():
-		var rect: Array = view.get("stock_rect", [192, 160, 200, 62])
-		_stock_yard = StockYard.new()
-		add_child(_stock_yard)
-		_stock_yard.setup(session, Rect2(float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])))
+	if session.classic:
+		_vans = VanYard.new()
+		add_child(_vans)
+		_vans.setup(session)
 
 	_token_layer = _make_layer(_draw_tokens)
 
@@ -143,6 +141,7 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 
 	session.clicked.connect(_on_clicked)
 	session.shipped.connect(_on_shipped)
+	session.dispatched.connect(_on_dispatched)
 	session.station_finished.connect(_on_station_finished)
 	session.upgrade_purchased.connect(_on_upgrade_purchased)
 	_refresh_automation()
@@ -194,7 +193,13 @@ func _process(delta: float) -> void:
 		_beacons[i].frame = (int(_time * 3.0 + i) % 2) if working else 0
 
 	_van_bob = maxf(_van_bob - delta, 0.0)
-	_van.position = _van_pos + Vector2(_yard.van_dx(), 1 if _van_bob > 0.08 else 0)
+	var dx := _yard.van_dx()
+	if _vans != null:
+		dx += _vans.van_dx()
+		var tex := _vans.van_texture()
+		if _van.texture != tex:
+			_van.texture = tex
+	_van.position = _van_pos + Vector2(dx, 1 if _van_bob > 0.08 else 0)
 
 	_pending_timer -= delta
 	if _pending_cash > 0.0 and _pending_timer <= 0.0:
@@ -262,8 +267,21 @@ func _draw_tokens() -> void:
 		if t.station >= 0 and session.line.stations[t.station].fraction() >= 0.55:
 			stage += 1   # show the result once the station is mostly done
 		stage = clampi(stage, 0, _stage_max)
+		var size := ITEM_SIZE
+		var tint := Color.WHITE
+		if session.variants_enabled() and t.sku >= 0 and t.sku < session.skus.size():
+			# Each product looks a little different: a tint, and a narrower, wider or taller cylinder.
+			var sk: Dictionary = session.skus[t.sku]
+			tint = Color.WHITE.lerp(Color(str(sk.get("tint", "ffffff"))), 0.45)
+			match str(sk.get("shape", "normal")):
+				"slim":
+					size = Vector2(14, 22)
+				"wide":
+					size = Vector2(22, 18)
+				"tall":
+					size = Vector2(18, 25)
 		_token_layer.draw_texture_rect_region(
-			_tex_items, Rect2(pos + Vector2(-9, 6 - ITEM_SIZE.y), ITEM_SIZE), Rect2(stage * ITEM_SIZE.x, 0, ITEM_SIZE.x, ITEM_SIZE.y))
+			_tex_items, Rect2(pos + Vector2(-size.x / 2.0, 6 - size.y), size), Rect2(stage * ITEM_SIZE.x, 0, ITEM_SIZE.x, ITEM_SIZE.y), tint)
 
 
 ## Redraws the wall sign straight away (used when renaming while paused).
@@ -399,6 +417,13 @@ func _on_shipped(_count: float, amount: float) -> void:
 	_pending_cash += amount
 	_van_bob = 0.16
 	burst(layout.dispatch_pos + Vector2(-4, -8), 4, UiTheme.GOLD, 40.0, 90.0, 0.5)
+
+
+## The delivery van has left with a load and the money has arrived.
+func _on_dispatched(_cylinders: float, money: float) -> void:
+	_pending_cash += money
+	_van_bob = 0.16
+	burst(_van_pos + Vector2(40, 20), 6, UiTheme.GOLD, 50.0, 90.0, 0.6)
 
 
 func _on_station_finished(index: int) -> void:

@@ -9,7 +9,10 @@
     "machine_speed": 1.0,
     "belt_speed": 48.0,
     "offline_hours": 8.0,
-    "warehouse_capacity": 12.0
+    "warehouse_capacity": 12.0,
+    "van_turnaround": 1.0,
+    "van_load": 1.0,
+    "delivery_bonus": 0.0
   },
   "upgrades": [
     {
@@ -169,6 +172,124 @@
       "effect_text": "Unlocks Stainless Horizontal",
       "effects": [],
       "stock": true
+    },
+    {
+      "id": "van_speed",
+      "name": "Faster Vans",
+      "icon": "s_ship",
+      "base_cost": 20000,
+      "cost_growth": 2.1,
+      "max_level": 6,
+      "unlock_at": 5000,
+      "desc": "The delivery lorry turns round quicker, so money lands sooner and more often.",
+      "effect_text": "Lorries return 15% sooner, +2% pay",
+      "effects": [
+        {
+          "stat": "van_turnaround",
+          "op": "mul",
+          "value": 0.85
+        },
+        {
+          "stat": "delivery_bonus",
+          "op": "add",
+          "value": 0.02
+        }
+      ],
+      "classic": true
+    },
+    {
+      "id": "van_load",
+      "name": "Bigger Lorries",
+      "icon": "s_case",
+      "base_cost": 80000,
+      "cost_growth": 2.4,
+      "max_level": 5,
+      "unlock_at": 40000,
+      "desc": "A bigger lorry takes bigger loads and earns a delivery bonus.",
+      "effect_text": "Bigger loads, +3% pay",
+      "effects": [
+        {
+          "stat": "van_load",
+          "op": "mul",
+          "value": 1.6
+        },
+        {
+          "stat": "delivery_bonus",
+          "op": "add",
+          "value": 0.03
+        }
+      ],
+      "classic": true
+    },
+    {
+      "id": "variant_st_dir",
+      "name": "New Product: Direct",
+      "icon": "product",
+      "base_cost": 25000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 30000,
+      "desc": "Start making Direct Stainless cylinders.",
+      "effect_text": "Unlocks Direct Stainless",
+      "effects": [],
+      "variant": "ST-DIR",
+      "classic": true
+    },
+    {
+      "id": "variant_st_ind",
+      "name": "New Product: Indirect",
+      "icon": "product",
+      "base_cost": 100000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 150000,
+      "desc": "Start making Indirect Stainless cylinders with a boiler coil.",
+      "effect_text": "Unlocks Indirect Stainless",
+      "effects": [],
+      "variant": "ST-IND",
+      "classic": true
+    },
+    {
+      "id": "variant_st_slm",
+      "name": "New Product: Slimline",
+      "icon": "product",
+      "base_cost": 400000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 600000,
+      "desc": "Narrow stainless vessels for tight spaces.",
+      "effect_text": "Unlocks Slimline Stainless",
+      "effects": [],
+      "variant": "ST-SLM",
+      "classic": true
+    },
+    {
+      "id": "variant_st_hor",
+      "name": "New Product: Horizontal",
+      "icon": "product",
+      "base_cost": 1500000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 2500000,
+      "desc": "Horizontal stainless vessels: a new handling cell.",
+      "effect_text": "Unlocks Horizontal Stainless",
+      "effects": [],
+      "variant": "ST-HOR",
+      "classic": true
+    },
+    {
+      "id": "variant_st_twn",
+      "name": "New Product: Premium",
+      "icon": "product",
+      "base_cost": 6000000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 10000000,
+      "desc": "The premium twin-coil stainless cylinder: the most valuable thing the plant can make.",
+      "effect_text": "Unlocks Premium Stainless",
+      "effects": [],
+      "variant": "ST-TWN",
+      "classic": true
     }
   ]
 }

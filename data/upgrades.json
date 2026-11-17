@@ -10,7 +10,10 @@
     "offline_hours": 8.0,
     "warehouse_capacity": 24.0,
     "forecast_quality": 0.3,
-    "auto_targets": 0.0
+    "auto_targets": 0.0,
+    "van_turnaround": 1.0,
+    "van_load": 1.0,
+    "delivery_bonus": 0.0
   },
   "upgrades": [
     {
@@ -166,6 +169,124 @@
       "effect_text": "Unlocks Copper Slimline",
       "effects": [],
       "stock": true
+    },
+    {
+      "id": "van_speed",
+      "name": "Faster Vans",
+      "icon": "conveyor",
+      "base_cost": 300,
+      "cost_growth": 2.1,
+      "max_level": 6,
+      "unlock_at": 600,
+      "desc": "The delivery van turns round quicker, so money lands sooner and more often.",
+      "effect_text": "Vans return 15% sooner, +2% pay",
+      "effects": [
+        {
+          "stat": "van_turnaround",
+          "op": "mul",
+          "value": 0.85
+        },
+        {
+          "stat": "delivery_bonus",
+          "op": "add",
+          "value": 0.02
+        }
+      ],
+      "classic": true
+    },
+    {
+      "id": "van_load",
+      "name": "Bigger Vans",
+      "icon": "pack",
+      "base_cost": 1500,
+      "cost_growth": 2.4,
+      "max_level": 5,
+      "unlock_at": 2500,
+      "desc": "A bigger vehicle takes bigger loads and earns a delivery bonus.",
+      "effect_text": "Bigger loads, +3% pay",
+      "effects": [
+        {
+          "stat": "van_load",
+          "op": "mul",
+          "value": 1.6
+        },
+        {
+          "stat": "delivery_bonus",
+          "op": "add",
+          "value": 0.03
+        }
+      ],
+      "classic": true
+    },
+    {
+      "id": "variant_cu_dir",
+      "name": "New Product: Direct",
+      "icon": "product",
+      "base_cost": 1500,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 4000,
+      "desc": "Start making Direct Copper cylinders: worth more each, a little slower to build.",
+      "effect_text": "Unlocks Direct Copper",
+      "effects": [],
+      "variant": "CU-DIR",
+      "classic": true
+    },
+    {
+      "id": "variant_cu_ind",
+      "name": "New Product: Indirect",
+      "icon": "product",
+      "base_cost": 6000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 15000,
+      "desc": "Start making Indirect Copper cylinders with a boiler coil.",
+      "effect_text": "Unlocks Indirect Copper",
+      "effects": [],
+      "variant": "CU-IND",
+      "classic": true
+    },
+    {
+      "id": "variant_cu_slm",
+      "name": "New Product: Slimline",
+      "icon": "product",
+      "base_cost": 25000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 60000,
+      "desc": "Narrow cylinders for tight cupboards: new forming rolls included.",
+      "effect_text": "Unlocks Slimline Copper",
+      "effects": [],
+      "variant": "CU-SLM",
+      "classic": true
+    },
+    {
+      "id": "variant_cu_hor",
+      "name": "New Product: Horizontal",
+      "icon": "product",
+      "base_cost": 100000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 250000,
+      "desc": "Loft cylinders: new tooling and cradles included.",
+      "effect_text": "Unlocks Horizontal Copper",
+      "effects": [],
+      "variant": "CU-HOR",
+      "classic": true
+    },
+    {
+      "id": "variant_cu_twn",
+      "name": "New Product: Twin-Coil",
+      "icon": "product",
+      "base_cost": 400000,
+      "cost_growth": 1.0,
+      "max_level": 1,
+      "unlock_at": 1000000,
+      "desc": "The premium twin-coil copper cylinder: two coils, a new winding machine, a big price.",
+      "effect_text": "Unlocks Twin-Coil Copper",
+      "effects": [],
+      "variant": "CU-TWN",
+      "classic": true
     }
   ]
 }
