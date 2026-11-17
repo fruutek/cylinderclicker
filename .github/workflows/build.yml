@@ -60,6 +60,11 @@ jobs:
           tests/run_touch_flow.sh godot | tee touch_flow.log
           ! grep -q -E "FAIL|SCRIPT ERROR" touch_flow.log && test "$(grep -c 'PASS' touch_flow.log)" = 2
 
+      - name: Run warehouse pages touch test (call answered, stock targets, customers, sales rep - by finger)
+        run: |
+          tests/run_stock_touch.sh godot | tee stock_touch.log
+          ! grep -q -E "FAIL|SCRIPT ERROR" stock_touch.log && grep -q "STOCK TOUCH: PASS" stock_touch.log
+
       - name: Run warehouse economy flow test (old save > migration > telephone orders > lorries > restart > two hours away)
         run: |
           tests/run_stock_flow.sh godot | tee stock_flow.log

@@ -280,7 +280,7 @@ func build_stock() -> Control:
 	list.add_child(head)
 	# the table
 	var hdr := b._row(4)
-	for pair: Array in [["PRODUCT", 0], ["FREE", 38], ["HELD", 38], ["TOTAL", 40], ["MAKING", 46], ["OWED", 38], ["TARGET", 112 if not UiTheme.touch else 150], ["", 26 if not UiTheme.touch else 40]]:
+	for pair: Array in [["PRODUCT", 0], ["FREE", 38], ["HELD", 38], ["TOTAL", 40], ["MAKING", 46], ["OWED", 38], ["DEMAND/m", 52], ["TARGET", 112 if not UiTheme.touch else 150], ["", 26 if not UiTheme.touch else 40]]:
 		hdr.add_child(_cell(pair[0], float(pair[1]), UiTheme.INK_SOFT, HORIZONTAL_ALIGNMENT_RIGHT if pair[0] != "PRODUCT" and pair[0] != "" else HORIZONTAL_ALIGNMENT_LEFT))
 	list.add_child(hdr)
 	_stock["rows"] = []
@@ -301,8 +301,10 @@ func _stock_row(sim: FactorySim, i: int) -> Control:
 	var refs := {"i": i}
 	refs["name"] = _cell("", 0.0)
 	r.add_child(refs["name"])
-	for key: String in ["free", "held", "total", "making", "owed"]:
+	for key: String in ["free", "held", "total", "making", "owed", "demand"]:
 		var w := 38.0 if key != "making" and key != "total" else (46.0 if key == "making" else 40.0)
+		if key == "demand":
+			w = 52.0
 		refs[key] = _cell("", w, UiTheme.INK, HORIZONTAL_ALIGNMENT_RIGHT)
 		r.add_child(refs[key])
 	var tr := b._row(2)
@@ -341,10 +343,15 @@ func _update_stock() -> void:
 		surplus += maxi(w.available(sim.sku_id(i)) - sim.effective_target(i), 0)
 	sell.text = "SELL SURPLUS NOW (%d)" % surplus
 	sell.disabled = surplus <= 0
+	sell.modulate = Color(1, 1, 1, 0.5) if sell.disabled else Color.WHITE
 	var space := _stock["space"] as Button
 	space.text = "MORE SPACE  %s  (+%d)" % [NumFmt.money(sim.cost("warehouse")), int(roundf(float(w.capacity) * 0.75))]
 	space.disabled = not sim.can_afford("warehouse")
+	space.modulate = Color(1, 1, 1, 0.5) if space.disabled else Color.WHITE
 	var first_prio: String = sim.state.priority[0] if not sim.state.priority.is_empty() else ""
+	var per_min := {}
+	for fr: Dictionary in sales.forecast(sim, false):
+		per_min[fr["sku"]] = float(fr["per_min"])
 	for refs: Dictionary in _stock["rows"]:
 		var i: int = refs["i"]
 		var id := sim.sku_id(i)
@@ -356,13 +363,17 @@ func _update_stock() -> void:
 		(refs["held"] as Label).text = str(w.reserved_units(id)) if avail else "-"
 		(refs["total"] as Label).text = str(w.total(id)) if avail else "-"
 		(refs["making"] as Label).text = str(int(roundf(float(w.wip.get(id, 0.0))))) if avail else "-"
+		(refs["demand"] as Label).text = NumFmt.number(float(per_min.get(id, 0.0)), 1) if avail else "-"
 		var owed := sim.backlog(i)
 		(refs["owed"] as Label).text = str(int(roundf(owed))) if avail else "-"
 		(refs["owed"] as Label).add_theme_color_override("font_color", UiTheme.RED if owed > 0.5 else UiTheme.INK)
 		var auto_t := sim.auto_targets_active()
 		(refs["value"] as Label).text = str(sim.effective_target(i)) if avail else "-"
 		for key: String in ["minus", "plus", "star"]:
-			(refs[key] as Button).disabled = not avail or (auto_t and key != "star")
+			var btn := refs[key] as Button
+			btn.disabled = not avail or (auto_t and key != "star")
+			if key != "star":
+				btn.modulate = Color(1, 1, 1, 0.4) if btn.disabled else Color.WHITE
 		(refs["star"] as Button).modulate = Color("f2c14e") if id == first_prio else Color.WHITE
 
 
