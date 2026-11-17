@@ -74,7 +74,18 @@ func _ready() -> void:
 			c.factory("copper").warehouse.receive("CU-IND", 60.0)
 			c.factory("copper").warehouse.receive("CU-DIR", 20.0)],
 		[12.1, func() -> void: _shot("s08_factory_full")],
-		[12.5, func() -> void: get_tree().quit()],
+		[12.6, func() -> void:
+			var st := c.factory("stainless")
+			st.state.unlocked = true
+			for m in st.data.machines:
+				st.state.upgrade_levels[m["id"]] = 3
+			st.state.upgrade_levels["warehouse"] = 1
+			st.refresh()
+			st.warehouse.receive("ST-IND", 9.0)
+			st.warehouse.receive("ST-DIR", 5.0)
+			main.call("switch_factory", "stainless")],
+		[14.2, func() -> void: _shot("s09_stainless_stock")],
+		[14.6, func() -> void: get_tree().quit()],
 	]
 
 
