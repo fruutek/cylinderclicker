@@ -48,6 +48,7 @@ var _belt_scroll := 0.0
 var _time := 0.0
 var _van_bob := 0.0
 var _particles: Array[Dictionary] = []
+var _ship_cooldown := 0.0        # a trickle of cylinders onto a nearly full pad would otherwise sparkle sixty times a second
 var _full_cooldown := {}         # station index -> seconds before it may say LINE FULL again
 var _load_fx := 0.0
 var _carry_seen := 0.0
@@ -206,6 +207,7 @@ func _process(delta: float) -> void:
 		if _van.texture != tex:
 			_van.texture = tex
 	_van.position = _van_pos + Vector2(dx, 1 if _van_bob > 0.08 else 0)
+	_ship_cooldown = maxf(_ship_cooldown - delta, 0.0)
 	_update_loading_fx(delta)
 	for k: int in _full_cooldown.keys():
 		_full_cooldown[k] -= delta
@@ -426,6 +428,9 @@ func _on_clicked(stations: Array) -> void:
 
 func _on_shipped(_count: float, amount: float) -> void:
 	_pending_cash += amount
+	if _ship_cooldown > 0.0:
+		return
+	_ship_cooldown = 0.12
 	_van_bob = 0.16
 	burst(layout.dispatch_pos + Vector2(-4, -8), 4, UiTheme.GOLD, 40.0, 90.0, 0.5)
 

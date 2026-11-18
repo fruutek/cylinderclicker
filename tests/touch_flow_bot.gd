@@ -228,7 +228,7 @@ func _phase_play() -> void:
 	# --- buying by tap
 	c.state.cash = 100.0
 	await _tap(_row("hand_tools").get_global_rect().get_center())
-	check(copper.level("hand_tools") == 1 and is_equal_approx(c.state.cash, 85.0), "tap buys an upgrade exactly once")
+	check(copper.level("hand_tools") == 1 and c.state.cash >= 85.0 - 1e-6, "tap buys an upgrade exactly once (level %d, cash %s)" % [copper.level("hand_tools"), c.state.cash])
 
 	# --- hold for details: shows the tooltip, does not buy
 	c.state.cash = 1000.0
@@ -258,7 +258,9 @@ func _phase_play() -> void:
 	_touch(0, pos, false)
 	await _wait(0.4)
 	check(scroll.scroll_vertical > 20, "dragging scrolls the list (scrolled %d)" % scroll.scroll_vertical)
-	check(JSON.stringify(copper.state.upgrade_levels) == levels and is_equal_approx(c.state.cash, 1000.0), "scrolling does not buy anything")
+	# (money may rise while a slow finger drag takes its time - a van can arrive - but nothing may be bought)
+	check(JSON.stringify(copper.state.upgrade_levels) == levels and c.state.cash >= 1000.0 - 1e-6,
+		"scrolling does not buy anything (levels %s -> %s, cash %s)" % [levels, JSON.stringify(copper.state.upgrade_levels), c.state.cash])
 	await _shot("t06_scrolled_machines")
 	var footer: Label = main.get("_shop").get("_footer")
 	check(footer.get_global_rect().position.y < vp.y, "scrolling reveals the bottom of the list")
