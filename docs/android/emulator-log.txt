@@ -4,12 +4,33 @@ InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regula
 Godot native layer initialization completed: true
 Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
 Godot native layer setup completed
-OnInitRenderView: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+OnInitRenderView: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
 Render view should be transparent: false
 renderingDevice: opengl3 (ProjectSettings)
 			renderer: gl_compatibility (ProjectSettings)
-OnStart: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
-OnResume: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+OnStart: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnResume: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnPause: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnStop: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnDestroy: GodotFragment{3b53b3e} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+ERROR: Condition "!_start_success" is true.
+   at: cleanup (main/main.cpp:5222)
+OnGodotTerminating
+Engine already initialized
+OnInitRenderView: GodotFragment{eac3541} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnStart: GodotFragment{eac3541} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+OnResume: GodotFragment{eac3541} (1b89d754-57e8-4f06-bc82-9504ff14bfad id=0x7f07002c)
+Initializing Godot plugin registry
+InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regular, --xr-mode, off, --fullscreen, --edge_to_edge, --background_color, #000000]
+Godot native layer initialization completed: true
+Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
+Godot native layer setup completed
+OnInitRenderView: GodotFragment{3b53b3e} (eaa85e65-1578-4973-9650-84d17836f921 id=0x7f07002c)
+Render view should be transparent: false
+renderingDevice: opengl3 (ProjectSettings)
+			renderer: gl_compatibility (ProjectSettings)
+OnStart: GodotFragment{3b53b3e} (eaa85e65-1578-4973-9650-84d17836f921 id=0x7f07002c)
+OnResume: GodotFragment{3b53b3e} (eaa85e65-1578-4973-9650-84d17836f921 id=0x7f07002c)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 OpenGL API OpenGL ES 3.1 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947)) - Compatibility - Using Device: Google (Google Inc. (Google)) - Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
 OnGodotSetupCompleted
@@ -34,8 +55,7 @@ SHOT t01_menu
 SHOT t02_name_dialog
 TAPBOX 1200 237
   keyboard: feature=true editing=true height by itself=0, after a real tap=0 (screen 1080 tall), name box bottom at 279
-  FAIL  Android keyboard opens for the factory name
-  ok    the name box stays visible above the keyboard
+  note  on-screen keyboard not shown on this device (a hardware keyboard is attached)
 SHOT a02_name_with_keyboard
   ok    factory named
 SHOT t03_intro
@@ -48,15 +68,15 @@ SHOT t03_intro
   ok    one tap = one click (no double count from the emulated mouse)
   ok    120 rapid two-finger taps all registered once each (got 120)
   ok    tap effects stay capped
-  rapid tapping: 240 frames in 46.01s (5 fps on this machine)
+  rapid tapping: 240 frames in 45.55s (5 fps on this machine)
   ok    tapping outside the factory does not manufacture
 SHOT t04_tapping
-  ok    tap buys an upgrade exactly once
+  ok    tap buys an upgrade exactly once (level 1, cash 85.0)
   ok    press and hold shows the details box on screen
 SHOT t05_hold_details
   ok    releasing a hold does not buy
   ok    dragging scrolls the list (scrolled 43)
-  ok    scrolling does not buy anything
+  ok    scrolling does not buy anything (levels {"hand_tools":1} -> {"hand_tools":1}, cash 1040.0)
 SHOT t06_scrolled_machines
   ok    scrolling reveals the bottom of the list
   ok    a tap after scrolling still buys
@@ -70,6 +90,7 @@ SHOT t08_stainless_plant
 SHOT t09_overview_both
   ok    switched back to copper by touch
 SHOT t10_copper_again
+  ok    classic game: no contract board to test (see tests/classic_touch_bot.gd)
   ok    Back opens the pause menu
   ok    pause button 'Resume Game' on screen and finger-sized
   ok    pause button 'Save Game' on screen and finger-sized
@@ -83,30 +104,30 @@ SHOT t12_settings
   ok    Back closes the dialog on top
   ok    Resume by tap
   ok    going to the background saves the game
-  ok    two hours in the background pays offline earnings once (got £5.45M, expected £5.45M)
+  ok    two hours in the background pays offline earnings once (got £5.46M, expected £5.45M)
   ok    welcome-back summary shown after resuming
 SHOT t13_welcome_back
   ok    resume re-saves, so that time can never be paid twice
   ok    brief app switches and repeated resumes pay nothing extra
-EXPECT cash=5763896.00 offline=5457600.00
+EXPECT cash=5761880.00 offline=5457600.00
 PROBE 894 675
   ok    20 real Android taps -> exactly 20 clicks (got 20)
 SHOT a15_after_real_taps
-TOUCH FLOW PHASE 1: FAIL (1)
+TOUCH FLOW PHASE 1: PASS
 PHASE DONE
-OnPause: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
-OnStop: GodotFragment{4d9d12d} (39eaaab7-0a18-4561-af1c-f6bbbc08db6d id=0x7f07002c)
+OnPause: GodotFragment{3b53b3e} (eaa85e65-1578-4973-9650-84d17836f921 id=0x7f07002c)
+OnStop: GodotFragment{3b53b3e} (eaa85e65-1578-4973-9650-84d17836f921 id=0x7f07002c)
 Initializing Godot plugin registry
 InitEngine with params: [--root-bot=res://tests/android_bot.gd, --xr_mode_regular, --xr-mode, off, --fullscreen, --edge_to_edge, --background_color, #000000]
 Godot native layer initialization completed: true
 Setting up native layer with params: [--root-bot=res://tests/android_bot.gd, --xr-mode, off, --fullscreen]
 Godot native layer setup completed
-OnInitRenderView: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnInitRenderView: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
 Render view should be transparent: false
 renderingDevice: opengl3 (ProjectSettings)
 			renderer: gl_compatibility (ProjectSettings)
-OnStart: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
-OnResume: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnStart: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
+OnResume: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 WARNING: Failed to load cached shader, recompiling.
    at: _load_from_cache (drivers/gles3/shader_gles3.cpp:615)
@@ -125,15 +146,23 @@ ANDROID INFO os=Android model=sdk_gphone64_x86_64 window=(2400, 1080) screen=(24
   ok    welcome-back summary shown
 SHOT t14_cold_start_welcome_back
 BG READY
-OnPause: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
-OnStop: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
-OnStart: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
-OnResume: GodotFragment{4d9d12d} (68a4332e-0ea2-4ad9-9a1a-a80dd02e0a31 id=0x7f07002c)
+OnPause: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
+OnStop: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
+OnStart: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
+OnResume: GodotFragment{3b53b3e} (af6b76c4-2965-4079-aeeb-2d11428836ee id=0x7f07002c)
   ok    Home button: Android paused the app and the game saved
-  ok    short trip to the home screen pays no bonus (earned £2,016 in 9s)
+  ok    short trip to the home screen pays no bonus (earned £2,000 in 10s)
   ok    no offline summary for a few seconds away
 SHOT a16_resumed
+  note  jam on device: machines set up, van away
+SHOT j1_pile_growing_at_conveyor_end
+SHOT j2_pad_full_line_backing_up
+SHOT j3_every_machine_stopped
+SHOT j4_van_back_loading
+SHOT j5_backlog_clearing
+  note  jam on device: pile 25 of 48 boxes, 2 machines blocked
 TOUCH FLOW PHASE 2: PASS
 ANDROID TEST DONE
 OnGodotTerminating
+      topResumedActivity=ActivityRecord{912bc44 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7}
 IME state:  mInputShown=false 
