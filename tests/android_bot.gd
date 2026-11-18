@@ -34,6 +34,7 @@ func _run() -> void:
 		await _tap_button("Lovely!")
 		await _real_background_cycle()
 		DirAccess.remove_absolute(MARKER)
+		await _jam_on_device()
 		print("TOUCH FLOW PHASE 2: %s" % ("PASS" if _fails == 0 else "FAIL (%d)" % _fails))
 		print("ANDROID TEST DONE")
 		Game.quit_game()
@@ -106,3 +107,46 @@ func _real_background_cycle() -> void:
 	check(c.state.cash - cash <= income * (elapsed + 5.0) * 1.3 + 100.0, "short trip to the home screen pays no bonus (earned %s in %.0fs)" % [NumFmt.money(c.state.cash - cash), elapsed])
 	check(_find_button("Lovely!") == null, "no offline summary for a few seconds away")
 	await _shot("a16_resumed")
+
+
+## Not a test (it only prints notes, so it can never fail the run): the traffic jam on the real device, for the screenshots.
+## The van is sent away, cartons pile up on the yard at the end of the conveyor, the pad fills, the line backs up through
+## the machines, and then the van comes back and clears it. Runs last, after every check, on a throw-away game.
+func _jam_on_device() -> void:
+	var c: GameSession = Game.session
+	Game.save_enabled = false
+	var copper := c.factory("copper")
+	c.bonus_orders.enabled = false
+	for i in copper.data.stations.size():
+		copper.state.upgrade_levels[GameData.machine_id(copper.data.stations[i]["id"])] = int(copper.data.stations[i]["work"]) * 2
+	copper.refresh()
+	var main := _scene()
+	main.call("switch_factory", "copper")
+	await _wait(1.0)
+	print("  note  jam on device: machines set up, van away")
+	copper.bay.state = DispatchBay.State.AWAY
+	copper.bay.timer = 600.0
+	await _warp(28.0)
+	await _shot("j1_pile_growing_at_conveyor_end")
+	await _warp(26.0)
+	await _shot("j2_pad_full_line_backing_up")
+	await _warp(24.0)
+	await _shot("j3_every_machine_stopped")
+	copper.bay.timer = 0.3
+	await _warp(5.0)
+	await _shot("j4_van_back_loading")
+	await _warp(5.0)
+	await _shot("j5_backlog_clearing")
+	print("  note  jam on device: pile %d of %d boxes, %d machines blocked" % [(main.get("_factory") as FactoryView)._vans._shown(), (main.get("_factory") as FactoryView)._vans.total_boxes(), copper.line.blocked_stations().size()])
+
+
+## Runs the simulation ahead, `seconds` of game time, a few seconds per frame so the view keeps up.
+func _warp(seconds: float) -> void:
+	var left := seconds
+	while left > 0.0:
+		var step := minf(left, 2.0)
+		for i in int(step * 60.0):
+			Game.session.tick(1.0 / 60.0)
+		left -= step
+		await get_tree().process_frame
+	await _wait(1.2)
