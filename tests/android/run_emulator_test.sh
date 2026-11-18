@@ -26,6 +26,26 @@ adb logcat -v raw -s godot:V Godot:V >> "$LOG" &
 LOGCAT_PID=$!
 trap 'kill $LOGCAT_PID 2>/dev/null' EXIT
 
+# Starts the app and waits for the bot's first line ("ANDROID INFO"). A cold start on a freshly booted,
+# software-rendered emulator now and then produces no output at all; a screenshot is kept and the app is
+# started again (up to three tries) instead of waiting out the whole phase timeout.
+start_app() {
+  local want=$(( $(grep -c "ANDROID INFO" "$LOG") + 1 )) try waited
+  for try in 1 2 3; do
+    adb shell am start -n "$ACT"
+    waited=0
+    while [ "$waited" -lt 150 ]; do
+      [ "$(grep -c "ANDROID INFO" "$LOG")" -ge "$want" ] && return 0
+      sleep 2; waited=$((waited + 2))
+    done
+    echo "no output from the app after ${waited}s (try $try); keeping a screenshot and starting it again"
+    adb exec-out screencap -p > "$OUT/a00_silent_start_$try.png"
+    adb shell dumpsys activity activities 2>/dev/null | grep -E -m3 "mResumedActivity|topResumedActivity" | tee -a "$OUT/ime.txt"
+    adb shell am force-stop "$PKG"; sleep 2
+  done
+  echo "the app never started"; return 1
+}
+
 # Follows the app log until a line matching $1 appears (or $2 seconds pass),
 # taking a device screenshot on "SHOT <name>" and sending real taps on "PROBE x y".
 SEEN=0
@@ -53,7 +73,7 @@ follow() {
   return 1
 }
 
-adb shell am start -n "$ACT"
+start_app
 follow "PHASE DONE" 900; P1=$?
 adb exec-out screencap -p > "$OUT/a17_before_home.png"
 # Send the app to the background the way a player would, then kill it.
@@ -67,7 +87,7 @@ for attempt in 1 2 3 4 5; do
   echo "app still running after force-stop (attempt $attempt)"
 done
 
-adb shell am start -n "$ACT"
+start_app
 follow "BG READY" 400; P2=$?
 adb shell input keyevent KEYCODE_HOME
 sleep 6
