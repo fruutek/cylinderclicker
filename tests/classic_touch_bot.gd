@@ -130,6 +130,59 @@ func _classic_touch() -> void:
 	var trips0 := copper.bay.trips
 	await _warp_sim(60.0)
 	check(copper.bay.trips >= trips0 + 3, "the van made %d trips in a minute" % (copper.bay.trips - trips0))
+	# --- a bottleneck, by touch: the van is away, the pad fills, the line backs up, tapping says LINE FULL, one tap fixes it
+	await _tap_button("UPGRADES")
+	c.state.cash = 100000.0
+	for m: Dictionary in copper.data.machines:
+		copper.state.upgrade_levels[m["id"]] = 12
+	copper.refresh()
+	copper.bay.set_stats(8.0, 12.0, 80.0, 0.0)
+	copper.bay.state = DispatchBay.State.AWAY
+	copper.bay.timer = 80.0
+	await _warp_sim(50.0)
+	await _wait(0.4)
+	check(copper.bay.is_full() and copper.backed_up(), "with the van away the pad fills (%d of %d) and the line backs up" % [copper.bay.load, copper.bay.storage])
+	check(copper.line.blocked_stations().size() == copper.line.stations.size(), "every machine is waiting for room")
+	var made0 := copper.state.cylinders_made
+	var cash_before := c.state.cash
+	var view: FactoryView = main.get("_factory")
+	for i in 8:
+		_touch(0, spot, true)
+		await _frames(1)
+		_touch(0, spot, false)
+		await _frames(1)
+	await _wait(0.2)
+	check(copper.state.cylinders_made == made0 and c.state.cash == cash_before, "tapping a full line makes nothing and earns nothing")
+	var said := false
+	for f: Dictionary in view._float_texts:
+		said = said or str(f["text"]) == "LINE FULL"
+	check(said, "and says LINE FULL above the stuck machines")
+	await _shot("classic_touch_jam")
+	var advice := copper.dispatch_advice()
+	check(advice != "", "the shop knows which upgrade clears it (%s)" % advice)
+	var fix_row := _row_button(str(copper.data.upgrade_by_id.get(advice, {}).get("name", "?")))
+	check(fix_row != null, "that row is on screen")
+	if fix_row != null:
+		var flagged := false
+		for l in _all_labels(fix_row):
+			flagged = flagged or l.text.begins_with("LINE FULL!")
+		check(flagged, "and flagged LINE FULL! in red")
+		var lvl0 := copper.level(advice)
+		await _tap(fix_row.get_global_rect().get_center())
+		check(copper.level(advice) == lvl0 + 1, "one tap buys the fix")
+	for id: String in ["van_load", "dispatch_store", "van_speed"]:
+		var row := _row_button(str(copper.data.upgrade_by_id[id]["name"]))
+		check(row != null and row.get_global_rect().size.y >= 30.0, "%s is a finger-sized row" % id)
+	copper.bay.state = DispatchBay.State.ARRIVING
+	copper.bay.timer = 0.5
+	var sold0 := copper.state.cylinders_sold
+	var fewest := copper.line.stations.size()
+	for i in 20:
+		await _warp_sim(1.0)
+		fewest = mini(fewest, copper.line.blocked_stations().size())
+	check(copper.state.cylinders_sold > sold0 and fewest < copper.line.stations.size(), "and the van collects, the line moves again (%d delivered)" % (copper.state.cylinders_sold - sold0))
+	check(absf(copper.line.injected - copper.line.released - copper.line.on_line()) < 1e-6, "no cylinder was lost or invented")
+	await _shot("classic_touch_flowing_again")
 	# --- the stainless plant: switching factories
 	var steel := c.factory("stainless")
 	steel.state.unlocked = true

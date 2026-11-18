@@ -962,21 +962,25 @@ func dispatch_advice() -> String:
 	return best
 
 
-## Plain-words effect of the three dispatch upgrades: "Van carries 16 -> 27 a trip". Empty for any other upgrade.
-func dispatch_text(id: String) -> String:
+## Plain-words effect of the three dispatch upgrades: "Carries 30 > 51 a trip". Empty for any other upgrade. With
+## `flagged` the line is backed up and this is the fix: the text leads with LINE FULL!
+func dispatch_text(id: String, flagged: bool = false) -> String:
 	if not classic:
 		return ""
 	var lvl := level(id)
 	var max_level := int(data.upgrade_by_id.get(id, {}).get("max_level", 0))
 	var maxed := max_level > 0 and lvl >= max_level
+	var text := ""
 	match id:
 		"van_load":
-			return "Van carries %s a trip" % _grow_text(bay.capacity, _stat_at(id, "van_capacity", 1.7), maxed, "")
+			text = "Carries %s" % _grow_text(bay.capacity, _stat_at(id, "van_capacity", 1.7), maxed, "") + ("" if flagged else " a trip")
 		"dispatch_store":
-			return "Pad holds %s" % _grow_text(bay.storage, _stat_at(id, "dispatch_storage", 1.7), maxed, "")
+			text = "Pad holds %s" % _grow_text(bay.storage, _stat_at(id, "dispatch_storage", 1.8), maxed, "")
 		"van_speed":
-			return "Van away %s" % _grow_text(bay.away_time, _stat_at(id, "van_away", 0.85), maxed, " s", 1)
-	return ""
+			text = "Away %s" % _grow_text(bay.away_time, _stat_at(id, "van_away", 0.85), maxed, " s", 1)
+		_:
+			return ""
+	return ("LINE FULL! " + text) if flagged else text
 
 
 func _stat_at(id: String, stat: String, fallback: float) -> float:

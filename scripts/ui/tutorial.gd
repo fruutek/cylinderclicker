@@ -22,7 +22,9 @@ const TOUCH_HINTS := {
 
 ## Wording for the classic game (cylinders wait for the delivery van).
 const CLASSIC_HINTS := {
-	2: "Finished cylinders wait at the dispatch bay for the VAN. When it drives off, you are paid! Keep clicking - your first upgrade costs £15.",
+	2: "Finished cylinders wait at the dispatch pad for the VAN. When it drives off, you are paid! Keep clicking - your first upgrade costs £15.",
+	5: "It runs by itself! Automate all six stations. If cylinders queue up, the next machine is too slow - and if the pad fills, the whole line backs up.",
+	6: "FULLY AUTOMATED! Upgrade the slowest machine, and keep the van and pad big enough for the output. Clicking still speeds everything up. Enjoy!",
 }
 
 var session: FactorySim          # the starting factory the hints talk about

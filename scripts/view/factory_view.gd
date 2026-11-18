@@ -48,6 +48,9 @@ var _belt_scroll := 0.0
 var _time := 0.0
 var _van_bob := 0.0
 var _particles: Array[Dictionary] = []
+var _full_cooldown := {}         # station index -> seconds before it may say LINE FULL again
+var _load_fx := 0.0
+var _carry_seen := 0.0
 var _float_texts: Array[Dictionary] = []
 var _pending_cash := 0.0
 var _pending_timer := 0.0
@@ -143,6 +146,7 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 	session.shipped.connect(_on_shipped)
 	session.dispatched.connect(_on_dispatched)
 	session.station_finished.connect(_on_station_finished)
+	session.line_full.connect(_on_line_full)
 	session.upgrade_purchased.connect(_on_upgrade_purchased)
 	_refresh_automation()
 
@@ -189,6 +193,8 @@ func _process(delta: float) -> void:
 		else:
 			_workers[i].frame = 0
 		var working := st.state() == ProductionLine.State.WORKING
+		# a machine that is waiting for room downstream dims, so a backed-up line reads at a glance
+		_fronts[i].modulate = Color(0.78, 0.74, 0.74) if st.state() == ProductionLine.State.BLOCKED else Color.WHITE
 		_cabinets[i].frame = int(_time * 2.0 + i) % 2
 		_beacons[i].frame = (int(_time * 3.0 + i) % 2) if working else 0
 
@@ -200,6 +206,11 @@ func _process(delta: float) -> void:
 		if _van.texture != tex:
 			_van.texture = tex
 	_van.position = _van_pos + Vector2(dx, 1 if _van_bob > 0.08 else 0)
+	_update_loading_fx(delta)
+	for k: int in _full_cooldown.keys():
+		_full_cooldown[k] -= delta
+		if _full_cooldown[k] <= 0.0:
+			_full_cooldown.erase(k)
 
 	_pending_timer -= delta
 	if _pending_cash > 0.0 and _pending_timer <= 0.0:
@@ -426,6 +437,35 @@ func _on_dispatched(_cylinders: float, money: float) -> void:
 	burst(_van_pos + Vector2(40, 20), 6, UiTheme.GOLD, 50.0, 90.0, 0.6)
 
 
+## While the van loads, small crates hop from the pad onto it.
+func _update_loading_fx(delta: float) -> void:
+	if _vans == null:
+		return
+	var bay := session.bay
+	var gained := bay.carry_load - _carry_seen
+	_carry_seen = bay.carry_load
+	if bay.state != DispatchBay.State.LOADING or gained <= 0.0:
+		return
+	_load_fx -= delta
+	if _load_fx > 0.0:
+		return
+	_load_fx = 0.07
+	var from := _vans.slot_pos(randi() % _vans.slots()) + Vector2(12, 4)
+	var to := _van_pos + Vector2(30, 24)
+	var life := 0.4
+	_particles.append({"pos": from, "vel": (to - from) / life + Vector2(0, -26), "gravity": 130.0, "age": 0.0, "life": life, "color": Color("c9a26a"), "size": 2.0})
+
+
+## A tap found a finished cylinder with nowhere to go: say so, above the machine that is stuck.
+func _on_line_full(stations: Array) -> void:
+	for i: int in stations:
+		if _full_cooldown.has(i):
+			continue
+		_full_cooldown[i] = 0.9
+		var pos := layout.station_positions[i] + Vector2(7, -52)
+		add_float_text(pos, "LINE FULL", Color("ff6a55"), 1.0)
+
+
 func _on_station_finished(index: int) -> void:
 	burst(layout.station_positions[index] + Vector2(14, -4), 2, Color(1, 1, 1, 0.8), 25.0, -20.0, 0.35)
 
@@ -433,6 +473,7 @@ func _on_station_finished(index: int) -> void:
 func _on_upgrade_purchased(id: String, lvl: int) -> void:
 	var def: Dictionary = session.data.upgrade_by_id[id]
 	if def["kind"] != "machine":
+		_dispatch_upgrade_feedback(id, lvl)
 		return
 	_refresh_automation()
 	var pos := layout.station_positions[int(def["station_index"])]
@@ -441,3 +482,22 @@ func _on_upgrade_purchased(id: String, lvl: int) -> void:
 		"pos": pos + Vector2(0, -62), "text": "AUTOMATED!" if lvl == 1 else "Lv %d" % lvl,
 		"age": 0.0, "life": 1.4, "color": Color("9ff0a0"),
 	})
+
+
+## Buying a dispatch upgrade is something to see: a new pallet appears, the vehicle grows, the van leaves sooner.
+func _dispatch_upgrade_feedback(id: String, lvl: int) -> void:
+	if _vans == null:
+		return
+	match id:
+		"dispatch_store":
+			var at := _vans.slot_pos(_vans.slots() - 1) + Vector2(12, 8)
+			burst(at, 14, UiTheme.GOLD, 70.0, 60.0, 0.7)
+			add_float_text(at + Vector2(0, -26), "MORE ROOM!", Color("9ff0a0"), 1.5)
+		"van_load":
+			var at := _van_pos + Vector2(36, 8)
+			burst(at, 16, UiTheme.GOLD, 80.0, 60.0, 0.7)
+			add_float_text(at + Vector2(0, -12), "BIGGER VAN!" if lvl < 2 else "BIGGER LOADS!", Color("9ff0a0"), 1.5)
+		"van_speed":
+			var at := _van_pos + Vector2(36, 8)
+			burst(at, 10, Color("b8f0ff"), 80.0, 20.0, 0.5)
+			add_float_text(at + Vector2(0, -12), "BACK SOONER!", Color("9ff0a0"), 1.5)

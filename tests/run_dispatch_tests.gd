@@ -17,7 +17,7 @@ func _init() -> void:
 	for t: String in [
 		"test_line_exit_gate", "test_conservation", "test_backlog_grows_backwards", "test_taps_cannot_bypass", "test_automation_pauses_and_resumes",
 		"test_van_loads_only_what_is_there", "test_van_intervals", "test_pad_is_finite", "test_upgrades", "test_two_factories_are_independent",
-		"test_save_roundtrip", "test_old_save_migrates", "test_offline_is_bounded", "test_early_game_is_not_blocked", "test_no_deadlock",
+		"test_save_roundtrip", "test_old_save_migrates", "test_v6_save_file_loads", "test_offline_is_bounded", "test_early_game_is_not_blocked", "test_no_deadlock",
 	]:
 		print("- ", t)
 		call(t)
@@ -334,7 +334,7 @@ func test_upgrades() -> void:
 	var t3 := lows.throughput(10.0)
 	check(t1 > t0 and t2 > t1 and t3 > t2, "each upgrade moves more cylinders: %.2f -> %.2f -> %.2f -> %.2f a second" % [t0, t1, t2, t3])
 	# the shop explains each one in plain words
-	check(cu.dispatch_text("van_load").contains("carries") and cu.dispatch_text("dispatch_store").contains("holds") and cu.dispatch_text("van_speed").contains("away"), "the shop rows say what they do")
+	check(cu.dispatch_text("van_load").contains("Carries") and cu.dispatch_text("dispatch_store").contains("holds") and cu.dispatch_text("van_speed").contains("Away") and cu.dispatch_text("van_load", true).begins_with("LINE FULL!"), "the shop rows say what they do")
 	# stainless has its own
 	var st := c.factory("stainless")
 	check(st.data.upgrade_by_id.has("dispatch_store") and st.bay.capacity != cu.bay.capacity or st.bay.storage != cu.bay.storage, "the stainless plant has its own dispatch numbers")
@@ -436,6 +436,42 @@ func test_old_save_migrates() -> void:
 	# the upgrade levels bought before keep their meaning
 	check(cu.level("van_speed") == 3 and cu.level("van_load") == 2 and cu.level("dispatch_store") == 0, "van upgrades keep their levels; storage starts at 0")
 	check(SaveManager.SAVE_VERSION == 7, "save version 7")
+
+
+func test_v6_save_file_loads() -> void:
+	# a real 0.8.0 save file: version 6, an unlimited pad with a big pile on it, a van mid-trip, van upgrades bought
+	var old := classic()
+	var cu := old.factory("copper")
+	automate(cu, 14)
+	cu.state.upgrade_levels["van_speed"] = 4
+	cu.state.upgrade_levels["van_load"] = 3
+	cu.state.upgrade_levels["variant_cu_dir"] = 1
+	cu.state.variant = "CU-DIR"
+	cu.refresh()
+	old.state.cash = 12345.0
+	var payload := {"game": "cylinder_clicker", "version": 6, "state": old.save_data()}
+	payload["state"]["factories"]["copper"]["bay"] = {"state": 2, "load": 140.0, "money": 1960.0, "carry_load": 0.0, "carry_money": 0.0, "timer": 3.0, "waited": 0.0, "trips": 31}
+	var f := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
+	f.store_string(JSON.stringify(payload))
+	f.close()
+	var st := SaveManager.load_game(TEST_SAVE)
+	check(not st.is_empty(), "a version 6 save file is accepted and migrated")
+	var c := classic()
+	c.load_state(st)
+	var u := c.factory("copper")
+	check(c.state.cash == 12345.0 and u.level("van_speed") == 4 and u.level("van_load") == 3 and u.level("dispatch_store") == 0, "money and upgrades are as they were")
+	near(u.bay.load, 140.0, 1e-9, "the 140 cylinders on the old pad are still there")
+	check(u.bay.state == DispatchBay.State.AWAY and absf(u.bay.timer - 3.0) < 1e-9 and u.bay.trips == 31, "the van is still on the same trip")
+	check(u.bay.capacity > 30.0 * 4.0 and u.bay.storage == 45.0, "it now has the new limits (van %d, pad %d)" % [u.bay.capacity, u.bay.storage])
+	var earned0 := c.state.cash
+	var worth := u.bay.unpaid()
+	run(c, 200.0)
+	check(c.state.cash - earned0 >= worth * 0.99, "the whole old pile was delivered and paid (£%s of £%s)" % [NumFmt.number(c.state.cash - earned0), NumFmt.number(worth)])
+	near(u.line.injected, u.line.released + u.line.on_line(), 1e-6, "and the line is consistent")
+	# saving again writes version 7
+	SaveManager.save_game(c.save_data(), TEST_SAVE, 100.0)
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(TEST_SAVE))
+	check(typeof(raw) == TYPE_DICTIONARY and int(raw.get("version", 0)) == 7, "and it is saved as version 7")
 
 
 func test_offline_is_bounded() -> void:

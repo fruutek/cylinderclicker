@@ -42,6 +42,9 @@ jobs:
       - name: Run classic game tests (variants, delivery van, bonus orders, saves from every version, offline, naming)
         run: godot --headless --path . -s tests/run_classic_tests.gd | tee classic_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" classic_tests.log && grep -q " 0 failed" classic_tests.log
 
+      - name: Run production bottleneck tests (finite queues, dispatch pad and van, upgrades, conservation, saves, offline)
+        run: godot --headless --path . -s tests/run_dispatch_tests.gd | tee dispatch_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" dispatch_tests.log && grep -q " 0 failed" dispatch_tests.log
+
       - name: Run retired-warehouse engine tests (kept for regression; not part of the game any more)
         run: godot --headless --path . -s tests/run_stock_tests.gd | tee stock_tests.log && ! grep -q -E "FAIL|SCRIPT ERROR" stock_tests.log && grep -q " 0 failed" stock_tests.log
 

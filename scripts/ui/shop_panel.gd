@@ -289,6 +289,12 @@ func refresh() -> void:
 					sub.add_theme_color_override("font_color", UiTheme.RED)
 		else:
 			sub.text = def.get("effect_text", "")
+			var flagged := session.backed_up() and session.dispatch_advice() == id
+			var plain := session.dispatch_text(id, flagged)
+			if plain != "":
+				sub.text = plain
+				if flagged:
+					sub.add_theme_color_override("font_color", UiTheme.RED)    # the line is backed up and this clears it fastest
 	_refresh_footer(bottleneck)
 	_refresh_products()
 	if _hover_id != "" and _tooltip.visible:

@@ -95,10 +95,9 @@ cylinders and a bigger factory, and come back later to find the factory has kept
   Horizontal, Premium. Each has its own price, build time, selling value and look on the belt (a tint, a slimmer, wider
   or taller body). Specialised cylinders are worth more but take longer, so each earns about 5-45% more per minute of
   line time than the one before it, never enough to make the older ones worthless (`data/variants.json`).
-- **The delivery van.** Finished cylinders wait on the pallets of the outbound pad. The van loads them, drives out of
-  the door - *that is when you are paid* - stays away for its turnaround and comes back, all by itself. It never slows
-  the factory down: cylinders made while it is out just wait for the next trip. **Faster Vans** shorten the turnaround and
-  **Bigger Vans** carry bigger loads (and the van becomes a lorry); both add a small delivery bonus.
+- **The delivery van.** Finished cylinders wait on the pallets of the dispatch pad. The van loads them, drives out of
+  the door - *that is when you are paid* - stays away for its turnaround and comes back, all by itself. It carries a
+  limited load and the pad holds a limited number of cylinders, which is what makes the line back up - see the next section.
 - **Bonus orders.** Now and then a customer offers an order ("Midlands Plumbing wants 20 Indirect: +£120"). One button,
   **ACCEPT**, in the bar. The factory switches to that cylinder by itself, and when the last one is made the next van
   takes the bonus with it. Ignore an offer and it simply goes away; nothing is ever mandatory (`data/bonus_orders.json`).
@@ -107,6 +106,43 @@ cylinders and a bigger factory, and come back later to find the factory has kept
   the matching cylinder, and everything else is untouched. `--direct-sales` on the command line runs the v0.5.1
   rules and interface instead (the older end-to-end tests use it). The warehouse and customer-relationship version of
   the game is preserved in git on the branch `checkpoint/v0.7.0-warehouse-ui` (release v0.7.0).
+
+## Bottlenecks: queues, the dispatch pad and the van
+
+![A backed-up line: queues full, machines waiting, LINE FULL](docs/screenshot_jam.png)
+
+The factory behaves like a real production line. Nothing vanishes and nothing is free:
+
+- **Cylinders queue.** Each station holds one cylinder and passes it to the next belt only if there is room. Belts hold a
+  fixed number of cylinders nose to tail. A station with a finished cylinder and no room is **blocked**: it dims, a
+  warning triangle appears over it, its machine stops, and it keeps its finished work until space opens.
+- **Dispatch is the end of the line.** Packing hands cylinders to the **dispatch pad**, which holds a limited number. When
+  the van is away and the pad is full, Packing blocks, then Testing, then each station behind it in turn: you can watch the
+  jam creep back along the line, one station at a time. Upstream machines carry on until *their* queue is full.
+- **Tapping obeys the same rules.** A tap helps every station that can take work. On a blocked station it does nothing -
+  no cylinder, no money, no lost progress - and a red **LINE FULL** appears over it. Automatic machines pause and resume
+  by themselves.
+- **The van carries a limited load.** It loads what is on the pad, up to its capacity, never more, and never leaves empty.
+  Money arrives as it drives away. While it is away the pad keeps filling.
+- **Three upgrades fix it** (each factory has its own, and its own van): **Bigger Delivery Vans** (cylinders per trip),
+  **Dispatch Storage** (pallets on the pad, and you see the new pallets appear) and **Faster Turnaround** (time away).
+  While the line is backed up the shop marks the upgrade that would clear it fastest in red, e.g. *LINE FULL! Carries 30 > 51*.
+
+![The same factory after the upgrades: the van is back and the queues move again](docs/screenshot_flowing_again.png)
+
+| Level | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Copper van carries | 30 | 51 | 87 | 147 | 251 | 426 | 724 | 1,231 | 2,093 (up to level 10) |
+| Copper pad holds | 45 | 81 | 146 | 262 | 472 | 850 | 1,531 | 2,755 | 4,959 (up to level 10) |
+| Time away (s) | 8 | 6.8 | 5.8 | 4.9 | 4.2 | 3.5 | 3.0 | 2.6 | 2.5 |
+
+The stainless plant starts smaller (a lorry of 12, a pad of 20, 10 s away) because it makes far fewer, far more valuable
+cylinders. The numbers are real cylinders; when a line makes more than two cylinders a second each cylinder drawn on the
+belt stands for a crate of several (the sign on the wall says how many) - nothing is created or lost, the counts are exact.
+**Time away from the game** respects dispatch too: a fully automated factory earns what its van can carry, not what its
+machines could make, and the welcome-back box says when dispatch held it back. Saves from 0.8.0 load unchanged (an old pad
+that holds more than the new limit keeps everything and is simply worked down by the van). The rules, balance numbers
+and test list are in `docs/production-bottlenecks.md`.
 
 ## What is in the game
 

@@ -12,6 +12,7 @@ var _shop: ShopPanel
 var _shop_holder: Control
 var _tip_layer: Control
 var _flash: ColorRect
+var _jam_hinted := false
 var _notified_buildable := {}
 var _check_timer := 0.0
 var _shop_size := Vector2i(ShopPanel.WIDTH, 330)
@@ -272,6 +273,12 @@ func _process(delta: float) -> void:
 	_check_timer -= delta
 	if _check_timer <= 0.0:
 		_check_timer = 0.5
+		if company.classic and not _jam_hinted and company.state.tutorial_step >= Tutorial.DONE_STEP:
+			for sim in company.unlocked_factories():
+				if sim.backed_up():
+					_jam_hinted = true
+					_toast("LINE FULL! Upgrade the van, the pad or the turnaround.", UiTheme.GOLD, 7.0)
+					break
 		for sim in company.factories:
 			var id := sim.data.id
 			if company.can_unlock(id) and not _notified_buildable.has(id):
@@ -366,7 +373,7 @@ func _show_intro() -> void:
 
 func _show_offline(summary: Dictionary) -> void:
 	var trade: Dictionary = summary.get("contracts", {})
-	var d := ModalDialog.new("WELCOME BACK!", 330 if not trade.is_empty() else 280)
+	var d := ModalDialog.new("WELCOME BACK!", 330 if not trade.is_empty() else 300)
 	d.esc_closes = false
 	var built := float(summary["cylinders"]) > 0.0
 	d.add_text("You were away for %s.%s" % [NumFmt.duration(summary["away_seconds"]), " Your machines kept the line running." if built else ""])
@@ -378,6 +385,11 @@ func _show_offline(summary: Dictionary) -> void:
 		d.add_text(lines.strip_edges(), UiTheme.INK_SOFT)
 	if built:
 		d.add_text("Cylinders built:  %s\nSold for:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])] if not trade.is_empty() else "Cylinders built:  %s\nMoney earned:  %s" % [NumFmt.number(summary["cylinders"]), NumFmt.money(summary["cash"])], UiTheme.GREEN)
+	var limited := false
+	for part: Dictionary in parts:
+		limited = limited or bool(part.get("dispatch_limited", false))
+	if limited:
+		d.add_text("Your delivery vans could not carry everything the line could make. Upgrade dispatch to earn more while you are away.", UiTheme.RED)
 	if summary["capped"]:
 		d.add_text("(The factory runs unattended for up to %s.)" % NumFmt.duration(summary["counted_seconds"]), UiTheme.INK_SOFT)
 	if not trade.is_empty():
