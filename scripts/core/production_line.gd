@@ -8,6 +8,11 @@ extends RefCounted
 ## the buffers: tokens queue nose-to-tail, so a slow station visibly backs
 ## the line up behind it (a bottleneck) and starves the stations after it.
 ##
+## The exit: the last belt delivers to a dispatch sink (`exit_cb`). The sink takes as many cylinders as it has
+## room for; when it is full the head token simply waits at the end of the belt, the belt fills, the last
+## station is blocked, and the jam creeps backwards one station at a time until the sink empties again.
+## Nothing is created or lost on the way: `injected` = `released` + what is on the line (see `on_line()`).
+##
 ## Scaling: a token is a *batch* of cylinders. While the line is slow every
 ## token is exactly one cylinder. Once machines could push more than
 ## MAX_TOKENS_PER_SECOND, new tokens carry proportionally more cylinders, so
@@ -66,6 +71,14 @@ var belt_speed := 48.0
 var click_power := 1.0
 var click_boost := 0.0
 var batch := 1.0
+
+## Hands finished cylinders to dispatch: (count: float, sku: int) -> float, the number of cylinders it accepted
+## (0 .. count). Unset = unlimited (the original behaviour: everything that reaches the end is shipped at once).
+var exit_cb: Callable = Callable()
+var exit_wait := 0.0            # seconds the head cylinder has been waiting at the end because dispatch is full
+var injected := 0.0             # cylinders started at the first station (since this object was made)
+var released := 0.0             # cylinders handed to dispatch
+var last_blocked: Array[int] = []   # stations that could not take work from the last click: they hold a finished cylinder
 
 ## Asks the factory what to make next: (manual: bool) -> {"sku", "work_mult", "count"}, or {} to leave the
 ## first station idle. Unset = the original behaviour (always one more base cylinder).
@@ -195,7 +208,7 @@ func _restore_token(raw: Dictionary, min_stage: int, max_stage: int) -> Token:
 	t.id = _next_id
 	_next_id += 1
 	t.stage = clampi(int(raw.get("stage", min_stage)), min_stage, max_stage)
-	t.count = maxf(float(raw.get("count", 1.0)), 1.0)
+	t.count = maxf(float(raw.get("count", 1.0)), 1.0e-6)     # the head of the last belt can hold a part-delivered remainder
 	t.sku = int(raw.get("sku", -1))                       # saves from before products: the base product
 	t.work_mult = maxf(float(raw.get("wm", 1.0)), 0.05)
 	return t
@@ -216,10 +229,7 @@ func tick(dt: float) -> void:
 	_click_age = minf(_click_age + dt, 99.0)
 	var last := stations.size() - 1
 	_advance_belt(last, dt)
-	var out_belt := belts[last]
-	while not out_belt.tokens.is_empty() and out_belt.tokens[0].pos >= out_belt.length - 0.01:
-		var t: Token = out_belt.tokens.pop_front()
-		shipped.emit(t.count, t.sku)
+	_drain_exit(dt)
 	# Work back-to-front so space freed downstream is usable in the same tick.
 	for i in range(last, -1, -1):
 		_tick_station(i, dt)
@@ -227,10 +237,53 @@ func tick(dt: float) -> void:
 			_advance_belt(i - 1, dt)
 
 
+## Moves cylinders from the end of the last belt into dispatch, as many as it has room for. A token that does not
+## fit completely hands over what fits and keeps the rest (still on the belt) for the next tick.
+func _drain_exit(dt: float) -> void:
+	var out_belt := belts[stations.size() - 1]
+	var waiting := false
+	while not out_belt.tokens.is_empty() and out_belt.tokens[0].pos >= out_belt.length - 0.01:
+		var t: Token = out_belt.tokens[0]
+		var taken := t.count
+		if exit_cb.is_valid():
+			taken = clampf(float(exit_cb.call(t.count, t.sku)), 0.0, t.count)
+		if taken <= 1e-9:
+			waiting = true
+			break
+		released += taken
+		if taken >= t.count - 1e-9:
+			out_belt.tokens.pop_front()
+			shipped.emit(t.count, t.sku)
+		else:
+			t.count -= taken
+			shipped.emit(taken, t.sku)
+			waiting = true
+			break
+	exit_wait = exit_wait + dt if waiting else 0.0
+
+
+## Cylinders currently on the line (stations and belts).
+func on_line() -> float:
+	var total := 0.0
+	for t in all_tokens():
+		total += t.count
+	return total
+
+
+## Stations holding a finished cylinder they cannot pass on yet.
+func blocked_stations() -> Array[int]:
+	var out: Array[int] = []
+	for i in stations.size():
+		if stations[i].state() == State.BLOCKED:
+			out.append(i)
+	return out
+
+
 ## One player click: every station with a cylinder in it gets a burst of work.
 ## Returns the indices of the stations that were helped.
 func click() -> Array[int]:
 	var hit: Array[int] = []
+	last_blocked.clear()
 	_manual = true          # a person is working the line: the factory may stockpile beyond its targets
 	_click_age = 0.0
 	for i in stations.size():
@@ -240,6 +293,8 @@ func click() -> Array[int]:
 		if s.token != null and s.progress < s.need:
 			_add_work(s, click_power + click_boost * s.rate)
 			hit.append(i)
+		elif s.token != null:
+			last_blocked.append(i)       # a finished cylinder with nowhere to go: tapping cannot help
 	_manual = false
 	return hit
 
@@ -277,6 +332,7 @@ func _try_load(i: int) -> void:
 			t.count = float(plan["count"])
 			t.sku = int(plan["sku"])
 			t.work_mult = float(plan["work_mult"])
+		injected += t.count
 	else:
 		var b := belts[i - 1]
 		if b.tokens.is_empty() or b.tokens[0].pos < b.length - 0.01:

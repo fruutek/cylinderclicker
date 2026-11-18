@@ -115,7 +115,7 @@ func test_variant_selection() -> void:
 
 func test_van_cycle() -> void:
 	var bay := DispatchBay.new()
-	bay.set_stats(10.0, 8.0, 0.0)
+	bay.set_stats(10.0, 40.0, 8.0, 0.0)
 	var paid := {"n": 0, "money": 0.0, "cyl": 0.0}
 	bay.departed.connect(func(cyl: float, money: float) -> void:
 		paid["n"] += 1
@@ -123,24 +123,25 @@ func test_van_cycle() -> void:
 		paid["cyl"] += cyl)
 	var back := {"n": 0}
 	bay.returned.connect(func() -> void: back["n"] += 1)
-	bay.add(3.0, 24.0)
+	bay.try_add(3.0, 8.0)
 	check(bay.state == DispatchBay.State.LOADING, "the van waits at the bay while there is only a little to take")
-	for i in int(6.0 / TICK):
+	for i in int(2.5 / TICK):
 		bay.tick(TICK)
-	check(bay.state == DispatchBay.State.LEAVING and paid["n"] == 0, "it leaves after waiting a few seconds, but nobody is paid until it has gone")
+	check(bay.state == DispatchBay.State.LEAVING and paid["n"] == 0, "it leaves once the pad has run dry, but nobody is paid until it has gone")
 	for i in int(3.2 / TICK):
 		bay.tick(TICK)
 	check(paid["n"] == 1 and absf(paid["money"] - 24.0) < 1e-6 and bay.state == DispatchBay.State.AWAY, "the load is paid when the van drives away (£%.0f)" % paid["money"])
-	bay.add(5.0, 40.0)                       # made while the van is out
+	bay.try_add(5.0, 8.0)                    # made while the van is out
 	for i in int(7.5 / TICK):
 		bay.tick(TICK)
 	check(bay.state == DispatchBay.State.ARRIVING, "after its turnaround the van comes back")
 	for i in int(1.5 / TICK):
 		bay.tick(TICK)
-	check(back["n"] == 1 and bay.state == DispatchBay.State.LOADING and bay.load == 5.0, "back at the bay: the cylinders made meanwhile were waiting for it")
-	bay.add(20.0, 160.0)                     # a full load sends it at once
-	bay.tick(TICK)
-	check(bay.state == DispatchBay.State.LEAVING, "a full load sends the van straight away")
+	check(back["n"] == 1 and bay.state == DispatchBay.State.LOADING and bay.load > 0.0, "back at the bay: the cylinders made meanwhile were waiting for it")
+	bay.try_add(20.0, 8.0)                   # a full van leaves as soon as it is loaded
+	for i in int(3.0 / TICK):
+		bay.tick(TICK)
+	check(bay.state == DispatchBay.State.LEAVING, "a full van leaves straight away")
 	var d := DispatchBay.new()
 	d.from_dict(bay.to_dict())
 	check(d.state == bay.state and d.carry_money == bay.carry_money and d.load == bay.load and d.unpaid() == bay.unpaid(), "the van's state survives a save")
@@ -171,14 +172,14 @@ func test_van_upgrades() -> void:
 	cu.state.upgrade_levels["van_speed"] = 3
 	cu.state.upgrade_levels["van_load"] = 2
 	cu.refresh()
-	check(cu.bay.away_time < away0 * 0.7 and cu.bay.away_time > 1.5, "Faster Vans shorten the turnaround (%.1f s -> %.1f s)" % [away0, cu.bay.away_time])
-	check(cu.bay.capacity > cap0 * 2.0, "Bigger Vans take bigger loads (%d -> %d)" % [cap0, cu.bay.capacity])
-	near(cu.bay.bonus, 3.0 * 0.02 + 2.0 * 0.03, 1e-9, "and both add a small delivery bonus")
+	check(cu.bay.away_time < away0 * 0.7 and cu.bay.away_time > 1.5, "Faster Turnaround shortens the van's time away (%.1f s -> %.1f s)" % [away0, cu.bay.away_time])
+	check(cu.bay.capacity > cap0 * 2.0, "Bigger Delivery Vans take bigger loads (%d -> %d)" % [cap0, cu.bay.capacity])
+	near(cu.bay.bonus, 3.0 * 0.02 + 2.0 * 0.02, 1e-9, "and both add a small delivery bonus")
 	var paid := {"m": 0.0}
 	cu.bay.departed.connect(func(_c: float, m: float) -> void: paid["m"] += m)
-	cu.bay.add(10.0, 100.0)
+	cu.bay.try_add(10.0, 10.0)
 	run(c, 9.0)
-	near(paid["m"], 100.0 * 1.12, 1e-6, "the bonus is added to the pay")
+	near(paid["m"], 100.0 * 1.10, 1e-6, "the bonus is added to the pay")
 	check(cu.is_visible("van_speed") and cu.cost("van_speed") > 0.0, "the van upgrades are in the shop")
 
 

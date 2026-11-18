@@ -7,7 +7,7 @@ extends RefCounted
 ## * Writes go to a temp file first and the previous save is kept as `.bak`,
 ##   so a crash mid-write cannot destroy progress.
 
-const SAVE_VERSION := 6
+const SAVE_VERSION := 7
 const DEFAULT_PATH := "user://savegame.json"
 const GAME_ID := "cylinder_clicker"
 
@@ -144,6 +144,15 @@ static func _migrate(payload: Dictionary) -> Dictionary:
 				if typeof(st5) != TYPE_DICTIONARY:
 					return {}
 				payload["version"] = 6
+			6:
+				# v7 gave dispatch real limits: a finite pad, a carrying capacity for the van, and queues that
+				# back up. The pad and van contents in `bay` keep their meaning (an old pad that holds more than
+				# the new limit keeps everything and just refuses more), and the three dispatch upgrades take
+				# their levels from the old van upgrades. Nothing needs converting.
+				var st6: Variant = payload.get("state", {})
+				if typeof(st6) != TYPE_DICTIONARY:
+					return {}
+				payload["version"] = 7
 			_:
 				return {}
 		version = int(payload.get("version", version + 1))

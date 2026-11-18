@@ -11,9 +11,10 @@
     "warehouse_capacity": 24.0,
     "forecast_quality": 0.3,
     "auto_targets": 0.0,
-    "van_turnaround": 1.0,
-    "van_load": 1.0,
-    "delivery_bonus": 0.0
+    "delivery_bonus": 0.0,
+    "van_capacity": 30.0,
+    "dispatch_storage": 45.0,
+    "van_away": 8.0
   },
   "upgrades": [
     {
@@ -172,17 +173,17 @@
     },
     {
       "id": "van_speed",
-      "name": "Faster Vans",
+      "name": "Faster Turnaround",
       "icon": "conveyor",
-      "base_cost": 300,
-      "cost_growth": 2.1,
-      "max_level": 6,
-      "unlock_at": 600,
-      "desc": "The delivery van turns round quicker, so money lands sooner and more often.",
-      "effect_text": "Vans return 15% sooner, +2% pay",
+      "base_cost": 250,
+      "cost_growth": 2.2,
+      "max_level": 8,
+      "unlock_at": 250,
+      "desc": "The van is away for less time, so it comes back to collect more often.",
+      "effect_text": "Van returns sooner",
       "effects": [
         {
-          "stat": "van_turnaround",
+          "stat": "van_away",
           "op": "mul",
           "value": 0.85
         },
@@ -196,24 +197,43 @@
     },
     {
       "id": "van_load",
-      "name": "Bigger Vans",
+      "name": "Bigger Delivery Vans",
       "icon": "pack",
-      "base_cost": 1500,
+      "base_cost": 500,
       "cost_growth": 2.4,
-      "max_level": 5,
-      "unlock_at": 2500,
-      "desc": "A bigger vehicle takes bigger loads and earns a delivery bonus.",
-      "effect_text": "Bigger loads, +3% pay",
+      "max_level": 10,
+      "unlock_at": 400,
+      "desc": "A bigger vehicle carries more cylinders on every trip. It grows from a van into a lorry.",
+      "effect_text": "Bigger loads",
       "effects": [
         {
-          "stat": "van_load",
+          "stat": "van_capacity",
           "op": "mul",
-          "value": 1.6
+          "value": 1.7
         },
         {
           "stat": "delivery_bonus",
           "op": "add",
-          "value": 0.03
+          "value": 0.02
+        }
+      ],
+      "classic": true
+    },
+    {
+      "id": "dispatch_store",
+      "name": "Dispatch Storage",
+      "icon": "product",
+      "base_cost": 400,
+      "cost_growth": 2.4,
+      "max_level": 10,
+      "unlock_at": 350,
+      "desc": "More pallet space at dispatch: finished cylinders can wait for the van without holding up the line.",
+      "effect_text": "More room to wait",
+      "effects": [
+        {
+          "stat": "dispatch_storage",
+          "op": "mul",
+          "value": 1.8
         }
       ],
       "classic": true

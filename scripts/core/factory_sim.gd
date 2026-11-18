@@ -16,6 +16,7 @@ signal station_finished(index: int)
 signal stocked(count: float, sku_id: String)                  # finished cylinders went into the warehouse
 signal dispatched(cylinders: float, money: float)           # the delivery van left with this load and was paid (classic game)
 signal produced(count: float, variant_id: String)             # cylinders were made (live or while away)
+signal line_full(stations: Array)                            # a tap found these stations holding a finished cylinder with nowhere to go
 signal sold_stock(units: float, amount: float, how: String)   # cylinders left for money ("order", "contract" or "wholesale")
 
 const OFFLINE_MIN_SECONDS := 60.0
@@ -184,6 +185,8 @@ func click() -> Array[int]:
 	company.total_clicks += 1
 	var hit := line.click()
 	clicked.emit(hit)
+	if classic and not line.last_blocked.is_empty():
+		line_full.emit(line.last_blocked.duplicate())
 	return hit
 
 
@@ -218,6 +221,8 @@ func steady_rate() -> float:
 
 
 func income_per_second() -> float:
+	if classic and variants_enabled():
+		return effective_rate() * profit_per_cylinder() * (1.0 + bay.bonus)
 	return steady_rate() * profit_per_cylinder()
 
 
@@ -316,8 +321,7 @@ func buy(id: String) -> bool:
 ## revenue. With no active contract the whole shipment is sold, exactly as before.
 func _on_line_shipped(count: float, sku_index: int = -1) -> void:
 	if variants_enabled():
-		_ship_to_bay(count, sku_index)
-		return
+		return              # the classic game hands cylinders to its dispatch pad as they arrive (_dispatch_accept)
 	if stock_enabled():
 		_receive_stock(count, sku_index)
 		return
@@ -377,6 +381,8 @@ func apply_offline(elapsed_seconds: float) -> Dictionary:
 		return {}            # in stock mode the company steps every factory together (GameSession.apply_offline)
 	if elapsed_seconds < OFFLINE_MIN_SECONDS:
 		return {}
+	if variants_enabled():
+		return _apply_offline_classic(elapsed_seconds)
 	var rate := steady_rate()
 	if rate <= 0.0:
 		return {}
@@ -840,10 +846,12 @@ func _bind_classic() -> void:
 	bay.departed.connect(_on_bay_departed)
 	_apply_bay_stats()
 	line.spawn_cb = Callable(self, "_spawn_variant") if not skus.is_empty() else Callable()
+	line.exit_cb = Callable(self, "_dispatch_accept") if not skus.is_empty() else Callable()
 
 
 func _apply_bay_stats() -> void:
-	bay.set_stats(10.0 * float(stats.get("van_load", 1.0)), 8.0 * float(stats.get("van_turnaround", 1.0)), float(stats.get("delivery_bonus", 0.0)))
+	bay.set_stats(float(stats.get("van_capacity", 16.0)), float(stats.get("dispatch_storage", 24.0)),
+		float(stats.get("van_away", 10.0)), float(stats.get("delivery_bonus", 0.0)))
 
 
 func _spawn_variant(_manual: bool) -> Dictionary:
@@ -851,16 +859,20 @@ func _spawn_variant(_manual: bool) -> Dictionary:
 	return {"sku": i, "work_mult": sku_work(i), "count": line.batch}
 
 
-## A finished cylinder reaches dispatch: it waits in the bay for the van. Money arrives when the van leaves.
-func _ship_to_bay(count: float, sku_index_on_token: int) -> void:
+## The end of the line offers finished cylinders to dispatch. The pad takes what fits and the rest waits on the
+## belt (so the line backs up); returns how many were taken.
+func _dispatch_accept(count: float, sku_index_on_token: int) -> float:
 	var i := sku_index_on_token if sku_index_on_token >= 0 and sku_index_on_token < skus.size() else variant_index()
-	bay.add(count, count * sku_profit(i))
-	state.cylinders_made = NumFmt.clamp_value(state.cylinders_made + count)
-	_buckets[_buckets.size() - 1] += count
-	_sale_buckets[_sale_buckets.size() - 1] += count
+	var n := bay.try_add(count, sku_profit(i))
+	if n <= 0.0:
+		return 0.0
+	state.cylinders_made = NumFmt.clamp_value(state.cylinders_made + n)
+	_buckets[_buckets.size() - 1] += n
+	_sale_buckets[_sale_buckets.size() - 1] += n
 	state.best_rate_per_min = maxf(state.best_rate_per_min, recent_rate_per_min())
-	produced.emit(count, sku_id(i))
-	shipped.emit(count, 0.0)
+	produced.emit(n, sku_id(i))
+	shipped.emit(n, 0.0)
+	return n
 
 
 func _on_bay_departed(cylinders: float, money: float) -> void:
@@ -870,3 +882,114 @@ func _on_bay_departed(cylinders: float, money: float) -> void:
 	state.cylinders_sold = NumFmt.clamp_value(state.cylinders_sold + cylinders)
 	cash_changed.emit()
 	dispatched.emit(cylinders, money)
+
+
+## Cylinders per second dispatch can move for this line (see DispatchBay.throughput).
+func dispatch_rate() -> float:
+	return bay.throughput(steady_rate())
+
+
+## What a fully automated line really delivers: the slower of its machines and its dispatch.
+func effective_rate() -> float:
+	return dispatch_rate() if classic else steady_rate()
+
+
+## True while production is held up because the pad is full (for the shop's hint): the line has been refused
+## at the end for a couple of seconds.
+func backed_up() -> bool:
+	return classic and line.exit_wait > 2.0
+
+
+## Unattended time in the classic game. The van keeps making trips, so what was waiting at the pad is delivered
+## first; after that the factory can deliver no more than its dispatch can carry (a load per round trip), however
+## fast its machines are. Worked out in one step, with no per-frame simulation.
+func _apply_offline_classic(elapsed_seconds: float) -> Dictionary:
+	var waiting := bay.settle()
+	var rate := effective_rate()
+	var cap := float(stats.get("offline_hours", 8.0)) * 3600.0
+	var counted := minf(elapsed_seconds, cap)
+	var made := floorf(rate * counted) if rate > 0.0 else 0.0
+	var amount := made * profit_per_cylinder() * (1.0 + bay.bonus) + float(waiting["money"])
+	var delivered := made + float(waiting["count"])
+	if delivered < 1.0 and amount <= 0.0:
+		return {}
+	company.cash = NumFmt.clamp_value(company.cash + amount)
+	company.lifetime_earned = NumFmt.clamp_value(company.lifetime_earned + amount)
+	state.earned = NumFmt.clamp_value(state.earned + amount)
+	state.cylinders_made = NumFmt.clamp_value(state.cylinders_made + made)
+	state.cylinders_sold = NumFmt.clamp_value(state.cylinders_sold + delivered)
+	cash_changed.emit()
+	if made > 0.0:
+		produced.emit(made, sku_id(variant_index()))
+	return {
+		"factory": data.id,
+		"name": data.name,
+		"away_seconds": elapsed_seconds,
+		"counted_seconds": counted,
+		"capped": elapsed_seconds > cap,
+		"cylinders": delivered,
+		"contracted": 0.0,
+		"cash": amount,
+		"dispatch_limited": steady_rate() > dispatch_rate() * 1.02,
+	}
+
+
+## The dispatch upgrade that would move the most extra cylinders for the line as it runs now ("" if none would help).
+## The shop flags this row while the line is backed up, so the way out is always one obvious tap.
+func dispatch_advice() -> String:
+	if not classic:
+		return ""
+	var p := maxf(steady_rate(), recent_rate_per_min() / 60.0 * 1.5)
+	var base := bay.throughput(p)
+	var best := ""
+	var best_gain := 1e-6
+	for id: String in ["van_load", "dispatch_store", "van_speed"]:
+		if not data.upgrade_by_id.has(id) or is_maxed(id) or not is_offered(id):
+			continue
+		var probe := DispatchBay.new()
+		probe.set_stats(bay.capacity, bay.storage, bay.away_time, 0.0)
+		match id:
+			"van_load":
+				probe.capacity *= _stat_at(id, "van_capacity", 1.7)
+			"dispatch_store":
+				probe.storage *= _stat_at(id, "dispatch_storage", 1.8)
+			"van_speed":
+				probe.away_time = maxf(probe.away_time * _stat_at(id, "van_away", 0.85), DispatchBay.MIN_AWAY)
+		var gain := probe.throughput(p) - base
+		if gain > best_gain:
+			best_gain = gain
+			best = id
+	return best
+
+
+## Plain-words effect of the three dispatch upgrades: "Van carries 16 -> 27 a trip". Empty for any other upgrade.
+func dispatch_text(id: String) -> String:
+	if not classic:
+		return ""
+	var lvl := level(id)
+	var max_level := int(data.upgrade_by_id.get(id, {}).get("max_level", 0))
+	var maxed := max_level > 0 and lvl >= max_level
+	match id:
+		"van_load":
+			return "Van carries %s a trip" % _grow_text(bay.capacity, _stat_at(id, "van_capacity", 1.7), maxed, "")
+		"dispatch_store":
+			return "Pad holds %s" % _grow_text(bay.storage, _stat_at(id, "dispatch_storage", 1.7), maxed, "")
+		"van_speed":
+			return "Van away %s" % _grow_text(bay.away_time, _stat_at(id, "van_away", 0.85), maxed, " s", 1)
+	return ""
+
+
+func _stat_at(id: String, stat: String, fallback: float) -> float:
+	for e: Dictionary in data.upgrade_by_id.get(id, {}).get("effects", []):
+		if e.get("stat") == stat:
+			return float(e["value"])
+	return fallback
+
+
+func _grow_text(now: float, per_level: float, maxed: bool, unit: String, decimals: int = 0) -> String:
+	if maxed:
+		return NumFmt.number(now, decimals) + unit
+	var next := now * per_level
+	if unit != "":
+		next = maxf(next, DispatchBay.MIN_AWAY)
+	return "%s > %s%s" % [NumFmt.number(now, decimals), NumFmt.number(next, decimals), unit]
