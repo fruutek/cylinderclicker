@@ -71,7 +71,7 @@ jobs:
           tests/run_classic_touch.sh godot | tee classic_touch.log
           ! grep -q -E "FAIL|SCRIPT ERROR" classic_touch.log && grep -q "CLASSIC TOUCH: PASS" classic_touch.log
 
-      - name: Run the traffic-jam story (phone screen: the pile at the end of the conveyor, the line backing up machine by machine, the van clearing it)
+      - name: Run the traffic-jam story (phone screen - the pile at the end of the conveyor, the line backing up machine by machine, the van clearing it)
         run: bash tests/run_jam_story.sh godot "$GITHUB_WORKSPACE/jam-shots" | tee jam_story.log && ! grep -q -E "FAIL|SCRIPT ERROR" jam_story.log && grep -q "JAM STORY: PASS" jam_story.log
 
       - name: Upload the traffic-jam screenshots
