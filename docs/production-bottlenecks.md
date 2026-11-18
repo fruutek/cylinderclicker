@@ -110,3 +110,10 @@ buys Dispatch Storage and watches the backlog flow into the new room, and repeat
 **Why a normal early game still does not jam:** the starting van and yard are deliberately comfortable for early tapping
 (2 cylinders a second); a jam appears when output outgrows dispatch - or when you send the van away in a test. The
 pile still visibly fills and empties with every trip.
+
+**On a real Android emulator:** CI also runs the 0.9.x code on an Android 14 emulator (landscape 2400x1080) and, at the end of its run,
+plays a short jam on a throw-away game (`tests/android_bot.gd`, `_jam_on_device`, non-gating). The real device frames are in
+`docs/android/j1_pile_growing_at_conveyor_end.png` ... `j5_backlog_clearing.png` (the full pad and stacked yard, the packed last
+conveyor, every machine blocked, then the van back at the bay and the backlog clearing). The step-by-step story with assertions
+runs at the phone's screen shape on the Linux build (`tests/run_jam_story.sh`); the emulator job runs the touch flow and the
+captures above.
