@@ -107,28 +107,33 @@ cylinders and a bigger factory, and come back later to find the factory has kept
   rules and interface instead (the older end-to-end tests use it). The warehouse and customer-relationship version of
   the game is preserved in git on the branch `checkpoint/v0.7.0-warehouse-ui` (release v0.7.0).
 
-## Bottlenecks: queues, the dispatch pad and the van
+## Bottlenecks: queues, the dispatch yard and the van
 
-![A backed-up line: queues full, machines waiting, LINE FULL](docs/screenshot_jam.png)
+![The traffic jam, frame by frame on a phone-sized screen](docs/jam/story_sheet.png)
 
-The factory behaves like a real production line. Nothing vanishes and nothing is free:
+The factory behaves like a real production line, and you can **watch** it clog and unclog:
 
 - **Cylinders queue.** Each station holds one cylinder and passes it to the next belt only if there is room. Belts hold a
   fixed number of cylinders nose to tail. A station with a finished cylinder and no room is **blocked**: it dims, a
-  warning triangle appears over it, its machine stops, and it keeps its finished work until space opens.
-- **Dispatch is the end of the line.** Packing hands cylinders to the **dispatch pad**, which holds a limited number. When
-  the van is away and the pad is full, Packing blocks, then Testing, then each station behind it in turn: you can watch the
-  jam creep back along the line, one station at a time. Upstream machines carry on until *their* queue is full.
+  warning triangle appears over it, its machine stops, and it keeps its finished work until space opens. A belt whose
+  cylinders are stuck stops moving too.
+- **Nothing falls off the end of the conveyor.** The last belt runs just past its final carton. Each carton that leaves it
+  **drops onto the dispatch yard** directly below the belt end and the van's door, and lands on a pallet. The pile of boxes
+  *is* the dispatch pad: its height is the pad's fill. (Close-up: `docs/jam/closeup_cartons_dropping_onto_pile.png`.)
+- **The jam creeps backwards.** While the van is away the pile grows. When the yard is full ("PAD FULL"), the last conveyor
+  fills with waiting cartons, then Packing stops, then Insulation, Pressure Test, Welding, Rolling and Cutting, one after
+  another, as far back as the line goes. Upstream machines keep working until *their* queue is full.
+- **The van comes back and it all moves.** Boxes hop from the pile onto the van as it loads
+  (`docs/jam/closeup_van_loading_from_pile.png`), room opens, and the backlog moves forward station by station.
 - **Tapping obeys the same rules.** A tap helps every station that can take work. On a blocked station it does nothing -
-  no cylinder, no money, no lost progress - and a red **LINE FULL** appears over it. Automatic machines pause and resume
-  by themselves.
+  no cylinder, no money, no lost progress - and a red **LINE FULL** appears over it.
 - **The van carries a limited load.** It loads what is on the pad, up to its capacity, never more, and never leaves empty.
-  Money arrives as it drives away. While it is away the pad keeps filling.
+  Money arrives as it drives away.
 - **Three upgrades fix it** (each factory has its own, and its own van): **Bigger Delivery Vans** (cylinders per trip),
-  **Dispatch Storage** (pallets on the pad, and you see the new pallets appear) and **Faster Turnaround** (time away).
-  While the line is backed up the shop marks the upgrade that would clear it fastest in red, e.g. *LINE FULL! Carries 30 > 51*.
+  **Dispatch Storage** (pallets on the yard: each level adds one, up to 12) and **Faster Turnaround** (time away). While the
+  line is backed up the shop marks the upgrade that would clear it fastest in red, e.g. *LINE FULL! Carries 30 > 51*.
 
-![The same factory after the upgrades: the van is back and the queues move again](docs/screenshot_flowing_again.png)
+![The backlog flowing forward into the bigger yard after the upgrade](docs/jam/backlog_clearing_after_upgrade.png)
 
 | Level | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -137,12 +142,14 @@ The factory behaves like a real production line. Nothing vanishes and nothing is
 | Time away (s) | 8 | 6.8 | 5.8 | 4.9 | 4.2 | 3.5 | 3.0 | 2.6 | 2.5 |
 
 The stainless plant starts smaller (a lorry of 12, a pad of 20, 10 s away) because it makes far fewer, far more valuable
-cylinders. The numbers are real cylinders; when a line makes more than two cylinders a second each cylinder drawn on the
-belt stands for a crate of several (the sign on the wall says how many) - nothing is created or lost, the counts are exact.
+cylinders. The numbers are real cylinders; when a line makes more than two cylinders a second each carton drawn on the
+belt stands for a crate of several (the label on the wall says how many) - nothing is created or lost, the counts are exact.
+A yard of 8 pallets holds 48 boxes, so at the start one box is about one cylinder; a bigger pad draws the same pile
+against more pallets (a box then stands for more cylinders).
 **Time away from the game** respects dispatch too: a fully automated factory earns what its van can carry, not what its
-machines could make, and the welcome-back box says when dispatch held it back. Saves from 0.8.0 load unchanged (an old pad
-that holds more than the new limit keeps everything and is simply worked down by the van). The rules, balance numbers
-and test list are in `docs/production-bottlenecks.md`.
+machines could make, and the welcome-back box says when dispatch held it back. Saves from 0.8.0 and 0.9.x load unchanged
+(an old pad that holds more than the new limit keeps everything and is simply worked down by the van). The rules, balance
+numbers, the diagnosis of the 0.9.0 "cylinders vanish" bug and the test list are in `docs/production-bottlenecks.md`.
 
 ## What is in the game
 

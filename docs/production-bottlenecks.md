@@ -1,4 +1,4 @@
-# Production bottlenecks, conveyor backlogs and delivery vans (0.9.0)
+# Production bottlenecks, conveyor backlogs and delivery vans (0.9.0, 0.9.1)
 
 ## What existed before (v0.8.0)
 * `ProductionLine` already modelled belts as finite buffers: a station holds one token (a cylinder, or a crate of
@@ -72,3 +72,41 @@ capacity, never leaves empty; return intervals; the pad never exceeds its size a
 both factories independent; save round trip (queues, blocked stations, pad, van timer); a real 0.8.0 (version 6) file;
 offline bounded by dispatch and counted once; early game rarely held up; no deadlock. `tests/classic_touch_bot.gd` drives the
 jam, the LINE FULL feedback and the fix with real injected touch events at the phone's screen shape.
+
+## 0.9.1: "cylinders still fall off the end of the conveyor" - diagnosis and fix
+**Report:** in 0.9.0 cylinders visibly vanished at the end of the belt instead of piling up; the backlog was not visible.
+
+**Investigation** (`tests/jam_probe_bot.gd`: prints the simulation's pad and last-belt tokens next to the drawn positions while the
+van is away, and takes screenshots):
+
+| Question | Finding |
+|---|---|
+| Rendering problem? | No. The belts and tokens were drawn correctly (a head cylinder at x=66 on a belt that ended at x=66 hung half off the end - fixed too). |
+| Simulation/visual mismatch? | No. Drawn token positions equal the simulation's belt positions to the pixel. |
+| How dispatch storage was represented? | **Yes - this was it.** While the pad had room, a cylinder reaching the belt end was accepted by the (numeric) pad and *removed from the screen*; the pad was drawn only as a faint strip of pallets at the very bottom edge, far from the conveyor. In one probe the pad took 34 cylinders between t=18 s and t=32 s while the belt only ever showed two cartons at its end; the queue appeared on screen only once the pad was numerically full. |
+
+So the simulation was right (finite pad, back-pressure, blocked stations) but the player could not see it.
+
+**Fix (view only - `scripts/core`, `data/`, prices, speeds and the economy are untouched):**
+* `VanYard` now draws the pad as a **dispatch yard directly below the end of the conveyor and the van's door**: 8 pallets (48
+  boxes, ~1 box per cylinder at the start), +1 pallet per Dispatch Storage level up to 12, filling nearest the belt end first.
+* **Every cylinder that leaves the belt visibly drops onto the pile**: a carton leaves the belt end, shrinks and lands. The
+  pile shows the pad's real fill minus what is still in the air, so it can never disagree with the simulation for longer than
+  a drop (0.34 s). Arrivals within 0.09 s share one carton.
+* **Loading is visible**: while the van loads, boxes hop from the top of the pile to the van's door.
+* The last belt's drawn surface runs 12 px past its final carton, so nothing hangs off the end.
+* **A belt whose cylinders have stopped moving stops too** (each belt segment has its own surface scroll), so a jam looks like one
+  and restarts when it clears.
+* The old gold "shipped" sparkle at the belt end is gone (the carton drop replaces it).
+
+**Verification** - `tests/run_jam_story.sh` (phone landscape shape, 1428x640) plays the whole story in the real game and checks
+what is *drawn*: the pile appears and grows (outline-pixel counts of the yard in the screenshot), a full pad is a full yard,
+the last belt fills, the head carton sits on the belt, the jam spreads from Packing back through every machine in order
+(timestamps), every machine is dimmed and stands still, the belts stop, the van returns and the pile shrinks on screen,
+machines and belts restart, **and every carton that leaves the belt is seen to drop (0 unexplained exits out of 131)**. It then
+buys Dispatch Storage and watches the backlog flow into the new room, and repeats the check for the stainless plant.
+`run_dispatch_tests.gd` has the same drop/pile invariants headless. Screenshots: `docs/jam/`.
+
+**Why a normal early game still does not jam:** the starting van and yard are deliberately comfortable for early tapping
+(2 cylinders a second); a jam appears when output outgrows dispatch - or when you send the van away in a test. The
+pile still visibly fills and empties with every trip.

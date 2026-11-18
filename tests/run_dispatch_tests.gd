@@ -17,7 +17,7 @@ func _init() -> void:
 	for t: String in [
 		"test_line_exit_gate", "test_conservation", "test_backlog_grows_backwards", "test_taps_cannot_bypass", "test_automation_pauses_and_resumes",
 		"test_van_loads_only_what_is_there", "test_van_intervals", "test_pad_is_finite", "test_upgrades", "test_two_factories_are_independent",
-		"test_save_roundtrip", "test_old_save_migrates", "test_v6_save_file_loads", "test_offline_is_bounded", "test_early_game_is_not_blocked", "test_no_deadlock",
+		"test_pile_view", "test_save_roundtrip", "test_old_save_migrates", "test_v6_save_file_loads", "test_offline_is_bounded", "test_early_game_is_not_blocked", "test_no_deadlock",
 	]:
 		print("- ", t)
 		call(t)
@@ -377,6 +377,69 @@ func test_two_factories_are_independent() -> void:
 	check(cu.bay.timer < t and st.bay.trips >= trips, "both vans keep their own timers")
 	near(cu.line.injected, cu.line.released + cu.line.on_line(), 1e-6, "copper conserved")
 	near(st.line.injected, st.line.released + st.line.on_line(), 1e-6, "stainless conserved")
+
+
+# ------------------------------------------------------- what is drawn
+## The dispatch pile on the floor (VanYard) is a view of the pad: it must never disagree with it for longer than a
+## carton takes to drop, and no cylinder may leave the end of the belt without being seen to drop onto it.
+func test_pile_view() -> void:
+	var c := classic()
+	var cu := c.factory("copper")
+	for i in cu.data.stations.size():
+		cu.state.upgrade_levels[GameData.machine_id(cu.data.stations[i]["id"])] = int(cu.data.stations[i]["work"]) * 2
+	cu.refresh()
+	pin(cu, 30.0, 45.0, 300.0)
+	cu.bay.state = DispatchBay.State.AWAY
+	cu.bay.timer = 300.0
+	var yard := VanYard.new()
+	yard.setup(cu, null, 6)
+	var last := cu.line.stations.size() - 1
+	var known := {}
+	var exits := 0
+	var unexplained := 0
+	var worst_gap := 0.0
+	var peak := 0
+	for i in 60 * 70:
+		c.tick(TICK)
+		yard._process(TICK)
+		var now := {}
+		for tk in cu.line.belts[last].tokens:
+			now[tk.id] = true
+		for id: int in known.keys():
+			if not now.has(id):
+				exits += 1
+				var seen := yard._pending > 0.0
+				for f in yard._fliers:
+					seen = seen or (f["kind"] == "drop" and f["age"] < 0.1)
+				if not seen:
+					unexplained += 1
+		known = now
+		peak = maxi(peak, yard._shown())
+		if yard._fliers.is_empty() and yard._pending == 0.0:
+			var gap := absf(float(yard._shown()) - ceilf(yard.target_boxes() - 0.001))
+			worst_gap = maxf(worst_gap, gap)
+	check(exits > 20, "many cartons left the end of the belt (%d)" % exits)
+	check(unexplained == 0, "every one dropped onto the pile; none just vanished (%d unexplained)" % unexplained)
+	check(worst_gap <= 1.0, "whenever nothing is in the air the drawn pile is the pad's real fill (worst gap %s boxes)" % worst_gap)
+	check(peak == yard.total_boxes() and cu.bay.is_full(), "a full pad is a full yard (%d of %d boxes)" % [peak, yard.total_boxes()])
+	check(yard._in_flight < 1e-6 or not yard._fliers.is_empty(), "no phantom boxes left in the air")
+	# a Dispatch Storage upgrade adds pallets to the yard
+	var slots0 := yard.slots()
+	cu.state.upgrade_levels["dispatch_store"] = 3
+	cu.refresh()
+	check(yard.slots() == slots0 + 3 and yard.total_boxes() == (slots0 + 3) * VanYard.BOXES, "each Dispatch Storage level adds a pallet (%d -> %d)" % [slots0, yard.slots()])
+	# while the van loads, boxes hop from the pile onto it; nothing hops when it is not loading
+	cu.bay.state = DispatchBay.State.ARRIVING
+	cu.bay.timer = 0.1
+	var hops := 0
+	for i in 60 * 6:
+		c.tick(TICK)
+		yard._process(TICK)
+		for f in yard._fliers:
+			if f["kind"] == "load" and f["age"] < TICK * 1.5:
+				hops += 1
+	check(hops >= 3, "boxes hop from the pile onto the van while it loads (%d)" % hops)
+	yard.free()
 
 
 # --------------------------------------------------------------- saving

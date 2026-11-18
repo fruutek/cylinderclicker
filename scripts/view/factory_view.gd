@@ -16,6 +16,7 @@ const SIZE := Vector2(444, 330)
 const MACHINE_ORIGIN := Vector2(-24, -46)
 const ITEM_SIZE := Vector2(18, 22)
 const MAX_PARTICLES := 240
+const BELT_OVERRUN := 12.0
 
 var session: FactorySim          # the factory being shown
 var company: GameState           # for the company/factory name on the sign
@@ -48,10 +49,11 @@ var _belt_scroll := 0.0
 var _time := 0.0
 var _van_bob := 0.0
 var _particles: Array[Dictionary] = []
-var _ship_cooldown := 0.0        # a trickle of cylinders onto a nearly full pad would otherwise sparkle sixty times a second
 var _full_cooldown := {}         # station index -> seconds before it may say LINE FULL again
-var _load_fx := 0.0
-var _carry_seen := 0.0
+var _belt_phase: Array[float] = []     # per belt: how far its surface has scrolled (a jammed belt stands still)
+var _belt_sig: Array[float] = []
+var _belt_idle: Array[float] = []
+var _path_belt: Array[int] = []        # which belt each drawn conveyor segment belongs to
 var _float_texts: Array[Dictionary] = []
 var _pending_cash := 0.0
 var _pending_timer := 0.0
@@ -114,7 +116,7 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 	if session.classic:
 		_vans = VanYard.new()
 		add_child(_vans)
-		_vans.setup(session)
+		_vans.setup(session, _tex_items, _stage_max)
 
 	_token_layer = _make_layer(_draw_tokens)
 
@@ -137,11 +139,20 @@ func setup(p_session: FactorySim, p_company: GameState) -> void:
 
 	# Full belt centre line for drawing (belts run underneath the machines).
 	_path.append(layout.station_positions[0] + Vector2(-22, 0))
+	_path_belt.append(-1)
 	for i in session.data.stations.size():
 		_path.append(layout.station_positions[i])
+		_path_belt.append(i - 1)             # the segment that arrives at this station is the end of the belt before it
 		for p: Array in session.data.stations[i].get("path_after", []):
 			_path.append(Vector2(float(p[0]), float(p[1])))
-	_path.append(layout.dispatch_pos)
+			_path_belt.append(i)
+	# the last belt runs a little past where its final cylinder stops, so that cylinder sits ON the belt
+	_path.append(layout.dispatch_pos + Vector2(-BELT_OVERRUN, 0))
+	_path_belt.append(session.data.stations.size() - 1)
+	for i in session.data.stations.size() + 1:
+		_belt_phase.append(0.0)
+		_belt_sig.append(0.0)
+		_belt_idle.append(0.0)
 
 	session.clicked.connect(_on_clicked)
 	session.shipped.connect(_on_shipped)
@@ -182,6 +193,7 @@ func _process(delta: float) -> void:
 		return
 	_time += delta
 	_belt_scroll += session.line.belt_speed * delta
+	_update_belts(delta)
 	_update_tokens(delta)
 
 	var line := session.line
@@ -207,8 +219,6 @@ func _process(delta: float) -> void:
 		if _van.texture != tex:
 			_van.texture = tex
 	_van.position = _van_pos + Vector2(dx, 1 if _van_bob > 0.08 else 0)
-	_ship_cooldown = maxf(_ship_cooldown - delta, 0.0)
-	_update_loading_fx(delta)
 	for k: int in _full_cooldown.keys():
 		_full_cooldown[k] -= delta
 		if _full_cooldown[k] <= 0.0:
@@ -237,6 +247,25 @@ func _process(delta: float) -> void:
 	_token_layer.queue_redraw()
 	_overlay_layer.queue_redraw()
 	_fx_layer.queue_redraw()
+
+
+# ------------------------------------------------------------------ belts
+## A belt whose cylinders have not moved for a moment is jammed: its surface stops until they move again.
+func _update_belts(delta: float) -> void:
+	var line := session.line
+	for i in line.belts.size():
+		var b := line.belts[i]
+		var sig := float(b.tokens.size()) * 1000.0
+		for t in b.tokens:
+			sig += t.pos
+		if b.tokens.is_empty() or absf(sig - _belt_sig[i]) > 0.01:
+			_belt_idle[i] = 0.0
+		else:
+			_belt_idle[i] += delta
+		_belt_sig[i] = sig
+		if _belt_idle[i] < 0.25:
+			_belt_phase[i] += line.belt_speed * delta
+	_belt_phase[line.belts.size()] += line.belt_speed * delta       # the feed belt at the start never jams
 
 
 # ----------------------------------------------------------------- tokens
@@ -318,10 +347,11 @@ func _draw_sign() -> void:
 # ------------------------------------------------------------------ belts
 func _draw_belts() -> void:
 	_draw_sign()
-	var frame := int(_belt_scroll / 2.0) % 4
 	for j in range(1, _path.size()):
 		var a := _path[j - 1]
 		var b := _path[j]
+		var belt := _path_belt[j]
+		var frame := int(_belt_phase[belt if belt >= 0 else _belt_phase.size() - 1] / 2.0) % 4
 		if is_equal_approx(a.y, b.y):
 			var x0 := minf(a.x, b.x)
 			var x1 := maxf(a.x, b.x)
@@ -428,9 +458,8 @@ func _on_clicked(stations: Array) -> void:
 
 func _on_shipped(_count: float, amount: float) -> void:
 	_pending_cash += amount
-	if _ship_cooldown > 0.0:
-		return
-	_ship_cooldown = 0.12
+	if session.classic:
+		return              # the cartons drop onto the dispatch pile (VanYard); money arrives when the van leaves
 	_van_bob = 0.16
 	burst(layout.dispatch_pos + Vector2(-4, -8), 4, UiTheme.GOLD, 40.0, 90.0, 0.5)
 
@@ -440,25 +469,6 @@ func _on_dispatched(_cylinders: float, money: float) -> void:
 	_pending_cash += money
 	_van_bob = 0.16
 	burst(_van_pos + Vector2(40, 20), 6, UiTheme.GOLD, 50.0, 90.0, 0.6)
-
-
-## While the van loads, small crates hop from the pad onto it.
-func _update_loading_fx(delta: float) -> void:
-	if _vans == null:
-		return
-	var bay := session.bay
-	var gained := bay.carry_load - _carry_seen
-	_carry_seen = bay.carry_load
-	if bay.state != DispatchBay.State.LOADING or gained <= 0.0:
-		return
-	_load_fx -= delta
-	if _load_fx > 0.0:
-		return
-	_load_fx = 0.07
-	var from := _vans.slot_pos(randi() % _vans.slots()) + Vector2(12, 4)
-	var to := _van_pos + Vector2(30, 24)
-	var life := 0.4
-	_particles.append({"pos": from, "vel": (to - from) / life + Vector2(0, -26), "gravity": 130.0, "age": 0.0, "life": life, "color": Color("c9a26a"), "size": 2.0})
 
 
 ## A tap found a finished cylinder with nowhere to go: say so, above the machine that is stuck.
